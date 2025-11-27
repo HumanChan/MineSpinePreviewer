@@ -1,8 +1,8 @@
-import { SkeletonData } from '@pixi-spine/runtime-3.8';
+import { Spine } from '@pixi-spine/runtime-3.8';
 
 export interface SpineModel {
   name: string;
-  skeletonData: SkeletonData;
+  spine: Spine;
   animations: string[];
   skins: string[];
   textureInfo: {

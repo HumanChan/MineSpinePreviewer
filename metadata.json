@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Spine 3.8 Previewer",
+  "name": "Spine 3.8 Previewer",
   "description": "A professional viewer for Spine 3.8 animations. Supports .skel binary files, atlases, and textures with drag-and-drop folder support.",
   "requestFramePermissions": []
 }

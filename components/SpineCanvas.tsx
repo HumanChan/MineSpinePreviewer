@@ -109,34 +109,29 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
       spineRef.current = null;
     }
 
-    try {
-        // Instantiate Spine object here, inside the context of the active application
-        const spine = new Spine(spineModel.skeletonData);
-        spineRef.current = spine;
+    const spine = spineModel.spine;
+    spineRef.current = spine;
 
-        // Reset Container Position to Center
-        const cx = appRef.current.screen.width / 2;
-        const cy = appRef.current.screen.height / 2 + 200; 
-        
-        mainContainerRef.current.x = cx;
-        mainContainerRef.current.y = cy;
-        mainContainerRef.current.scale.set(1); // Reset zoom
-        
-        spine.x = 0;
-        spine.y = 0;
-        
-        // Initial Scale 
-        spine.scale.set(0.5);
+    // Reset Container Position to Center
+    const cx = appRef.current.screen.width / 2;
+    const cy = appRef.current.screen.height / 2 + 200; 
+    
+    mainContainerRef.current.x = cx;
+    mainContainerRef.current.y = cy;
+    mainContainerRef.current.scale.set(1); // Reset zoom
+    
+    spine.x = 0;
+    spine.y = 0;
+    
+    // Initial Scale 
+    spine.scale.set(0.5);
 
-        mainContainerRef.current.addChild(spine as any);
+    mainContainerRef.current.addChild(spine as any);
 
-        // Default animation
-        if (spineModel.animations.length > 0) {
-            const initialAnim = spineModel.animations.find(a => a.toLowerCase().includes('idle')) || spineModel.animations[0];
-            spine.state.setAnimation(0, initialAnim, loop);
-        }
-    } catch (e) {
-        console.error("Error creating Spine instance:", e);
+    // Default animation
+    if (spineModel.animations.length > 0) {
+        const initialAnim = spineModel.animations.find(a => a.toLowerCase().includes('idle')) || spineModel.animations[0];
+        spine.state.setAnimation(0, initialAnim, loop);
     }
   }, [spineModel]);
 

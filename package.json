@@ -1,5 +1,5 @@
 {
-  "name": "copy-of-spine-3.8-previewer",
+  "name": "spine-3.8-previewer",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,9 +12,9 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "lucide-react": "^0.555.0",
-    "pixi.js": "7.3.3",
-    "@pixi-spine/base": "4.0.4",
-    "@pixi-spine/runtime-3.8": "4.0.4"
+    "pixi.js": "^7.4.2",
+    "@pixi-spine/base": "^4.0.6",
+    "@pixi-spine/runtime-3.8": "^4.0.6"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

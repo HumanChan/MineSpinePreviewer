@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { TextureAtlas } from '@pixi-spine/base';
-import { SkeletonBinary, AtlasAttachmentLoader } from '@pixi-spine/runtime-3.8';
+import { Spine, SkeletonBinary, AtlasAttachmentLoader } from '@pixi-spine/runtime-3.8';
 import { UploadedFile, SpineModel } from '../types';
 import { readFileAsArrayBuffer, readFileAsText } from '../utils/fileHelpers';
 
@@ -46,7 +46,6 @@ export class SpineLoaderService {
 
     // 4. Create Texture Atlas
     return new Promise((resolve, reject) => {
-      // Use 'any' for the loaderFunction argument as PIXI.BaseTexture is not exported in newer PixiJS versions
       new TextureAtlas(atlasText, (path: string, loaderFunction: (t: any) => void) => {
         // Find the matching pre-loaded image
         // Atlas paths might be relative, e.g., "images/head.png", but our file list might be flat or different.
@@ -81,32 +80,29 @@ export class SpineLoaderService {
           return;
         }
 
-        // Create Texture from pre-loaded image
-        // We use Texture.from to ensure PIXI creates the BaseTexture correctly from the DOM Image
+        // Create Texture from pre-loaded image (Pixi v8 style)
+        // In v8, BaseTexture is removed. Texture.from handles Image/HTMLImageElement directly.
         const texture = PIXI.Texture.from(foundImage);
-        
-        // Handle both v7 (baseTexture) and v8 (source)
-        const base = (texture as any).baseTexture || (texture as any).source;
-        loaderFunction(base);
+        loaderFunction(texture);
 
       }, (atlas: TextureAtlas) => {
         // 5. Atlas loaded, now load Skeleton
         try {
-          // @ts-ignore - The types between base and runtime might have slight mismatches in strict mode due to versioning, but they are compatible at runtime
           const atlasLoader = new AtlasAttachmentLoader(atlas);
           const skeletonBinary = new SkeletonBinary(atlasLoader);
 
           // Need to read the .skel file as ArrayBuffer
           readFileAsArrayBuffer(skelFile.file).then((buffer) => {
             const skeletonData = skeletonBinary.readSkeletonData(new Uint8Array(buffer));
-            
+            const spine = new Spine(skeletonData);
+
             // Extract metadata
             const animations = skeletonData.animations.map(a => a.name);
             const skins = skeletonData.skins.map(s => s.name);
 
             resolve({
               name: skelFile.name.replace('.skel', ''),
-              skeletonData,
+              spine,
               animations,
               skins,
               textureInfo
