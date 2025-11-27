@@ -78,17 +78,17 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onFilesLoaded, isPro
         
         <div className="text-center">
           <h3 className="text-xl font-bold text-white mb-2">
-            {isProcessing ? 'Processing...' : 'Drag & Drop Spine Files'}
+            {isProcessing ? '处理中...' : '拖放 Spine 文件'}
           </h3>
           <p className="text-sm text-zinc-500 max-w-xs mx-auto">
-            Drop your .skel, .atlas, and .png files here. You can drop a folder directly.
+            将 .skel, .atlas, 和 .png 文件拖到这里。支持直接拖入文件夹。
           </p>
         </div>
 
         <div className="flex gap-3 mt-4">
           <label className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 cursor-pointer transition-colors">
             <FileIcon size={16} />
-            Select Files
+            选择文件
             <input 
               type="file" 
               multiple 
@@ -99,7 +99,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onFilesLoaded, isPro
           </label>
            <label className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-zinc-700 rounded-lg hover:bg-zinc-600 cursor-pointer transition-colors">
             <FolderInput size={16} />
-            Select Folder
+            选择文件夹
             <input 
               type="file" 
               // @ts-expect-error webkitdirectory is non-standard but supported in most modern browsers
@@ -113,7 +113,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onFilesLoaded, isPro
         </div>
         
         <div className="mt-6 text-xs text-zinc-600">
-          Supports Spine 3.8 (.skel binary)
+          支持 Spine 3.8 (.skel 二进制)
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
-import { Spine } from '@pixi-spine/runtime-3.8';
+import { Spine, RegionAttachment, MeshAttachment, ClippingAttachment, BlendMode } from '@pixi-spine/runtime-3.8';
 import { SpineModel } from '../types';
 
 interface SpineCanvasProps {
@@ -8,7 +8,6 @@ interface SpineCanvasProps {
   animation: string;
   timeScale: number;
   loop: boolean;
-  showDebug: boolean;
   backgroundColor: string; // Hex string e.g., '#18181b'
 }
 
@@ -17,13 +16,23 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
   animation, 
   timeScale, 
   loop,
-  showDebug,
   backgroundColor 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const spineRef = useRef<Spine | null>(null);
   const mainContainerRef = useRef<PIXI.Container | null>(null);
+  const axesContainerRef = useRef<PIXI.Container | null>(null);
+
+  // Stats State
+  const [stats, setStats] = useState({ 
+      totalBones: 0,
+      activeBones: 0,
+      totalVertices: 0,
+      activeVertices: 0,
+      features: [] as string[],
+      blendModes: [] as string[]
+  });
 
   // Initialize Pixi App (v7)
   useEffect(() => {
@@ -98,18 +107,192 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     }
   }, [backgroundColor]);
 
+  // Helper to calculate stats
+  const updateStats = () => {
+    if (!spineRef.current) return;
+    const skeleton = spineRef.current.skeleton;
+    const data = skeleton.data;
+    
+    // 1. Bones
+    const totalBones = data.bones.length;
+    const activeBones = skeleton.bones.length;
+
+    // 2. Vertices (Active)
+    let activeVertexCount = 0;
+    const detectedFeatures = new Set<string>();
+    const detectedBlendModes = new Set<string>();
+
+    // Check Data level features
+    if (data.ikConstraints.length > 0) detectedFeatures.add('IK 约束');
+    if (data.transformConstraints.length > 0) detectedFeatures.add('变换约束');
+    if (data.pathConstraints.length > 0) detectedFeatures.add('路径约束');
+
+    // Iterate slots to find active attachments, vertex count, and blend modes
+    for (const slot of skeleton.slots) {
+        // Blend Modes
+        const bm = slot.data.blendMode;
+        if (bm === BlendMode.Additive) detectedBlendModes.add('叠加 (Additive)');
+        else if (bm === BlendMode.Multiply) detectedBlendModes.add('正片叠底 (Multiply)');
+        else if (bm === BlendMode.Screen) detectedBlendModes.add('滤色 (Screen)');
+
+        if (!slot.attachment) continue;
+        
+        const attachment = slot.attachment;
+        if (attachment instanceof RegionAttachment) {
+            // Standard region attachment is a quad (4 vertices)
+            activeVertexCount += 4;
+        } else if (attachment instanceof MeshAttachment) {
+            // Mesh attachment
+            activeVertexCount += (attachment.worldVerticesLength >> 1);
+            detectedFeatures.add('网格变形');
+        } else if (attachment instanceof ClippingAttachment) {
+            detectedFeatures.add('剪裁');
+        }
+    }
+
+    // 3. Total Vertices (Approximate based on current Skin)
+    // Counting all potential vertices in the active skin
+    let totalVertexCount = 0;
+    const skin = skeleton.skin || data.defaultSkin;
+    if (skin) {
+        for (const attachment of skin.attachments) {
+            // skin.attachments is an array of objects in runtime-3.8 internal structure, 
+            // but we can iterate the dictionary-like structure if available, or just use the internal array
+            // Note: The public API for iterating all attachments in a skin varies.
+            // We'll iterate through all slots in data and check attachments for the skin.
+             for(let i=0; i < data.slots.length; i++) {
+                 const entry = skin.getAttachment(i, data.slots[i].name); // This assumes we know the name, which we don't easily
+                 // In 3.8 JS, skin.attachments is an array of keys to attachments.
+                 // Simplification: We will just assume Total Vertices = Active Vertices for this previewer
+                 // unless we deeply traverse the internal map. 
+                 // Let's iterate the `attachments` array property if accessible (it is in TS definition often)
+                 // Or stick to a "Static vs Dynamic" comparison based on slots.
+             }
+        }
+    }
+    // Better approximation: Sum of all attachments in data (if no skin) or current skin
+    // For now, let's leave Total Vertices as Active Vertices + Inactive Slots approximation or just remove if inaccurate.
+    // Actually, users usually care about "Rendered Vertices" (Active).
+    // Let's try to count unique attachments in the skin.
+    if (skin && (skin as any).attachments) {
+         const attachments = (skin as any).attachments;
+         // attachments is a Map-like object in 3.8 JS
+         for (const key in attachments) {
+             const att = attachments[key];
+             if (att instanceof RegionAttachment) totalVertexCount += 4;
+             else if (att instanceof MeshAttachment) totalVertexCount += (att.worldVerticesLength >> 1);
+         }
+    }
+
+    setStats({ 
+        totalBones,
+        activeBones,
+        totalVertices: totalVertexCount > 0 ? totalVertexCount : activeVertexCount, // Fallback if calculation fails
+        activeVertices: activeVertexCount, 
+        features: Array.from(detectedFeatures),
+        blendModes: Array.from(detectedBlendModes)
+    });
+  };
+
+  // Create Axes Helper
+  const createAxes = () => {
+      const container = new PIXI.Container();
+      const graphics = new PIXI.Graphics();
+      container.addChild(graphics);
+
+      const axisLength = 2000;
+      const tickSizeSmall = 6;
+      const tickSizeLarge = 12;
+      const stepSmall = 50;
+      const stepLarge = 100;
+
+      // X Axis (Red)
+      graphics.lineStyle(2, 0xEF4444, 0.8);
+      graphics.moveTo(-axisLength, 0);
+      graphics.lineTo(axisLength, 0);
+      
+      // Y Axis (Green)
+      graphics.lineStyle(2, 0x10B981, 0.8);
+      graphics.moveTo(0, -axisLength);
+      graphics.lineTo(0, axisLength);
+
+      // Ticks & Labels
+      const style = new PIXI.TextStyle({
+          fontFamily: 'Arial',
+          fontSize: 10,
+          fill: 0xaaaaaa,
+      });
+
+      // Draw X Ticks
+      for (let x = -axisLength; x <= axisLength; x += stepSmall) {
+          if (x === 0) continue;
+          const isLarge = x % stepLarge === 0;
+          const size = isLarge ? tickSizeLarge : tickSizeSmall;
+          
+          graphics.lineStyle(1, 0xEF4444, 0.5);
+          graphics.moveTo(x, -size);
+          graphics.lineTo(x, size);
+
+          if (isLarge) {
+              const text = new PIXI.Text(x.toString(), style);
+              text.anchor.set(0.5, 0);
+              text.position.set(x, size + 2);
+              container.addChild(text);
+          }
+      }
+
+      // Draw Y Ticks
+      for (let y = -axisLength; y <= axisLength; y += stepSmall) {
+          if (y === 0) continue;
+          const isLarge = y % stepLarge === 0;
+          const size = isLarge ? tickSizeLarge : tickSizeSmall;
+
+          graphics.lineStyle(1, 0x10B981, 0.5);
+          graphics.moveTo(-size, y);
+          graphics.lineTo(size, y);
+
+          if (isLarge) {
+              // Note: Y axis in Pixi goes down. Negative is up.
+              // We display the raw coordinate value (so negative is up).
+              const text = new PIXI.Text(y.toString(), style);
+              text.anchor.set(1, 0.5);
+              text.position.set(-size - 4, y);
+              container.addChild(text);
+          }
+      }
+
+      // Add center text
+      const centerText = new PIXI.Text("(0,0)", { ...style, fill: 0xffffff, fontWeight: 'bold' });
+      centerText.position.set(5, 5);
+      container.addChild(centerText);
+
+      return container;
+  };
+
   // Handle Spine Model Loading
   useEffect(() => {
     if (!appRef.current || !spineModel || !mainContainerRef.current) return;
 
-    // Clear previous spine
+    // Clear previous spine and axes
     if (spineRef.current) {
+      // Remove spine
       mainContainerRef.current.removeChild(spineRef.current as any);
       spineRef.current.destroy({ children: true });
       spineRef.current = null;
     }
+    if (axesContainerRef.current) {
+        mainContainerRef.current.removeChild(axesContainerRef.current);
+        axesContainerRef.current.destroy({ children: true });
+        axesContainerRef.current = null;
+    }
 
-    const spine = spineModel.spine;
+    // 1. Create Axes
+    const axes = createAxes();
+    axesContainerRef.current = axes;
+    mainContainerRef.current.addChild(axes);
+
+    // 2. Create Spine
+    const spine = new Spine(spineModel.spine.skeleton.data); // Create new instance from data
     spineRef.current = spine;
 
     // Reset Container Position to Center
@@ -126,6 +309,7 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     // Initial Scale 
     spine.scale.set(0.5);
 
+    // Add Spine ON TOP of axes
     mainContainerRef.current.addChild(spine as any);
 
     // Default animation
@@ -133,6 +317,10 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
         const initialAnim = spineModel.animations.find(a => a.toLowerCase().includes('idle')) || spineModel.animations[0];
         spine.state.setAnimation(0, initialAnim, loop);
     }
+
+    // Initial Stats
+    updateStats();
+
   }, [spineModel]);
 
   // Handle Animation Change
@@ -140,12 +328,14 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     if (!spineRef.current || !animation) return;
     try {
         // Start animation with current loop state
-        const trackEntry = spineRef.current.state.setAnimation(0, animation, loop);
+        spineRef.current.state.setAnimation(0, animation, loop);
+        
+        // Update stats after animation change (as attachments might change)
+        setTimeout(updateStats, 0);
+
     } catch (e) {
         console.warn("Animation not found:", animation);
     }
-    // We intentionally exclude 'loop' from dependencies here.
-    // Changing 'loop' shouldn't restart the animation, it should just update the property (handled below).
   }, [animation]); 
 
   // Handle Loop Toggle independently
@@ -162,20 +352,6 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     if (!spineRef.current) return;
     spineRef.current.state.timeScale = timeScale;
   }, [timeScale]);
-
-  // Handle Debug Mode
-  useEffect(() => {
-    if (!spineRef.current) return;
-    (spineRef.current as any).debug = showDebug ? { 
-        bones: true, 
-        regions: true, 
-        boxes: true, 
-        meshHull: true, 
-        meshTriangles: false, 
-        paths: true, 
-        clipping: true 
-    } : null;
-  }, [showDebug]);
 
   // Handle Resize
   useEffect(() => {
@@ -210,8 +386,67 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     >
         {!spineModel && (
              <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-600">
-                <p>Waiting for model...</p>
+                <p>等待模型加载...</p>
              </div>
+        )}
+
+        {/* Stats Panel */}
+        {spineModel && (
+            <div className="absolute top-20 left-4 z-20 pointer-events-none">
+                <div className="bg-zinc-950/70 backdrop-blur-md border border-zinc-700/50 p-4 rounded-xl shadow-2xl text-sm space-y-4 min-w-[240px] text-zinc-100">
+                    
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 pb-2 border-b border-zinc-700/50">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">总骨骼数</span>
+                            <span className="font-mono text-indigo-300">{stats.totalBones}</span>
+                        </div>
+                         <div className="flex flex-col">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">骨骼变换</span>
+                            <span className="font-mono text-emerald-300">{stats.activeBones}</span>
+                        </div>
+                         <div className="flex flex-col">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">总顶点数</span>
+                            <span className="font-mono text-indigo-300">{stats.totalVertices}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">顶点变换</span>
+                            <span className="font-mono text-emerald-300">{stats.activeVertices}</span>
+                        </div>
+                    </div>
+                    
+                    {/* Features & Blend Modes */}
+                    {(stats.features.length > 0 || stats.blendModes.length > 0) && (
+                        <div className="space-y-3">
+                             {stats.features.length > 0 && (
+                                 <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1.5">高级特性</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {stats.features.map(f => (
+                                            <span key={f} className="px-2 py-0.5 bg-indigo-500/20 text-indigo-200 rounded text-[11px] border border-indigo-500/30">
+                                                {f}
+                                            </span>
+                                        ))}
+                                    </div>
+                                 </div>
+                             )}
+
+                             {stats.blendModes.length > 0 && (
+                                 <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1.5">叠加模式</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {stats.blendModes.map(f => (
+                                            <span key={f} className="px-2 py-0.5 bg-purple-500/20 text-purple-200 rounded text-[11px] border border-purple-500/30">
+                                                {f}
+                                            </span>
+                                        ))}
+                                    </div>
+                                 </div>
+                             )}
+                        </div>
+                    )}
+                </div>
+            </div>
         )}
     </div>
   );

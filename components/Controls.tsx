@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, AlertCircle, Layers, Box, RotateCcw, Repeat, Image as ImageIcon } from 'lucide-react';
+import { Play, Pause, AlertCircle, Layers, RotateCcw, Repeat, Image as ImageIcon } from 'lucide-react';
 import { SpineModel } from '../types';
 
 interface ControlsProps {
@@ -12,8 +12,6 @@ interface ControlsProps {
   onToggleLoop: () => void;
   timeScale: number;
   onTimeScaleChange: (scale: number) => void;
-  showDebug: boolean;
-  onToggleDebug: () => void;
   onResetView: () => void;
   spineModel: SpineModel | null;
 }
@@ -28,8 +26,6 @@ export const Controls: React.FC<ControlsProps> = ({
   onToggleLoop,
   timeScale,
   onTimeScaleChange,
-  showDebug,
-  onToggleDebug,
   onResetView,
   spineModel
 }) => {
@@ -38,9 +34,9 @@ export const Controls: React.FC<ControlsProps> = ({
       
       {/* Header */}
       <div className="p-4 border-b border-zinc-800 bg-zinc-900">
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Model</h2>
-        <div className="text-white font-medium truncate" title={spineModel?.name || "No model loaded"}>
-          {spineModel?.name || "No model loaded"}
+        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">当前模型</h2>
+        <div className="text-white font-medium truncate" title={spineModel?.name || "未加载模型"}>
+          {spineModel?.name || "未加载模型"}
         </div>
         
         {/* Texture Info */}
@@ -64,13 +60,13 @@ export const Controls: React.FC<ControlsProps> = ({
         <div className="space-y-2">
             <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
-                    <Layers size={14} /> Animations ({animations.length})
+                    <Layers size={14} /> 动作列表 ({animations.length})
                 </h3>
             </div>
           
           <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
             {animations.length === 0 ? (
-                <div className="text-zinc-600 italic px-2">No animations found</div>
+                <div className="text-zinc-600 italic px-2">未找到动作</div>
             ) : (
                 animations.map((anim) => (
                 <button
@@ -94,7 +90,7 @@ export const Controls: React.FC<ControlsProps> = ({
 
         {/* Playback Controls */}
         <div className="space-y-4 pt-4 border-t border-zinc-800">
-            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Playback</h3>
+            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">播放控制</h3>
             
             <div className="flex items-center gap-2">
                 <button 
@@ -102,13 +98,13 @@ export const Controls: React.FC<ControlsProps> = ({
                     className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md transition-all ${isPlaying ? 'bg-zinc-800 text-white border border-zinc-700 hover:bg-zinc-700' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}
                 >
                     {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-                    <span className="font-medium">{isPlaying ? 'Pause' : 'Play'}</span>
+                    <span className="font-medium">{isPlaying ? '暂停' : '播放'}</span>
                 </button>
                 
                 <button 
                     onClick={onToggleLoop}
                     className={`w-10 flex items-center justify-center py-2 rounded-md border transition-all ${isLooping ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:text-zinc-300'}`}
-                    title="Toggle Loop"
+                    title="循环播放"
                 >
                     <Repeat size={16} />
                 </button>
@@ -116,7 +112,7 @@ export const Controls: React.FC<ControlsProps> = ({
 
             <div className="space-y-3">
                 <div className="flex justify-between text-xs text-zinc-400">
-                    <span>Speed</span>
+                    <span>速度</span>
                     <span className="font-mono">{timeScale.toFixed(2)}x</span>
                 </div>
                 <input
@@ -150,21 +146,13 @@ export const Controls: React.FC<ControlsProps> = ({
 
         {/* View Settings */}
         <div className="space-y-4 pt-4 border-t border-zinc-800">
-             <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">View Options</h3>
+             <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">视图选项</h3>
              
-             <button
-                onClick={onToggleDebug}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors border border-zinc-700 ${showDebug ? 'bg-indigo-900/30 border-indigo-500/50 text-indigo-300' : 'text-zinc-400 hover:bg-zinc-800'}`}
-             >
-                 <span className="flex items-center gap-2"><Box size={14}/> Debug Bones</span>
-                 <div className={`w-2 h-2 rounded-full ${showDebug ? 'bg-indigo-500' : 'bg-zinc-600'}`}></div>
-             </button>
-
              <button
                 onClick={onResetView}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors border border-zinc-800"
              >
-                 <RotateCcw size={14}/> Reset Camera
+                 <RotateCcw size={14}/> 重置视角
              </button>
         </div>
 
@@ -173,7 +161,7 @@ export const Controls: React.FC<ControlsProps> = ({
       {/* Footer info */}
       <div className="p-4 border-t border-zinc-800 text-[10px] text-zinc-600 flex items-center gap-2">
           <AlertCircle size={12} />
-          <span>Supports Spine 3.8 (.skel)</span>
+          <span>支持 Spine 3.8 (.skel 二进制)</span>
       </div>
     </div>
   );
