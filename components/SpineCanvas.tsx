@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
-import { Spine, RegionAttachment, MeshAttachment, ClippingAttachment, BlendMode } from '@pixi-spine/runtime-3.8';
+import { Spine, RegionAttachment, MeshAttachment, ClippingAttachment } from '@pixi-spine/runtime-3.8';
 import { SpineModel } from '../types';
 
 interface SpineCanvasProps {
@@ -9,6 +9,15 @@ interface SpineCanvasProps {
   timeScale: number;
   loop: boolean;
   backgroundColor: string; // Hex string e.g., '#18181b'
+}
+
+// Spine 3.8 Blend Mode Enum
+// 0: Normal, 1: Additive, 2: Multiply, 3: Screen
+enum SpineBlendMode {
+    Normal = 0,
+    Additive = 1,
+    Multiply = 2,
+    Screen = 3,
 }
 
 export const SpineCanvas: React.FC<SpineCanvasProps> = ({ 
@@ -131,9 +140,12 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     for (const slot of skeleton.slots) {
         // Blend Modes
         const bm = slot.data.blendMode;
-        if (bm === BlendMode.Additive) detectedBlendModes.add('叠加 (Additive)');
-        else if (bm === BlendMode.Multiply) detectedBlendModes.add('正片叠底 (Multiply)');
-        else if (bm === BlendMode.Screen) detectedBlendModes.add('滤色 (Screen)');
+        // Cast to number to avoid type mismatch between Pixi BLEND_MODES and local SpineBlendMode enum
+        const bmVal = bm as unknown as number;
+
+        if (bmVal === SpineBlendMode.Additive) detectedBlendModes.add('叠加 (Additive)');
+        else if (bmVal === SpineBlendMode.Multiply) detectedBlendModes.add('正片叠底 (Multiply)');
+        else if (bmVal === SpineBlendMode.Screen) detectedBlendModes.add('滤色 (Screen)');
 
         if (!slot.attachment) continue;
         
@@ -154,26 +166,8 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     // Counting all potential vertices in the active skin
     let totalVertexCount = 0;
     const skin = skeleton.skin || data.defaultSkin;
-    if (skin) {
-        for (const attachment of skin.attachments) {
-            // skin.attachments is an array of objects in runtime-3.8 internal structure, 
-            // but we can iterate the dictionary-like structure if available, or just use the internal array
-            // Note: The public API for iterating all attachments in a skin varies.
-            // We'll iterate through all slots in data and check attachments for the skin.
-             for(let i=0; i < data.slots.length; i++) {
-                 const entry = skin.getAttachment(i, data.slots[i].name); // This assumes we know the name, which we don't easily
-                 // In 3.8 JS, skin.attachments is an array of keys to attachments.
-                 // Simplification: We will just assume Total Vertices = Active Vertices for this previewer
-                 // unless we deeply traverse the internal map. 
-                 // Let's iterate the `attachments` array property if accessible (it is in TS definition often)
-                 // Or stick to a "Static vs Dynamic" comparison based on slots.
-             }
-        }
-    }
+    
     // Better approximation: Sum of all attachments in data (if no skin) or current skin
-    // For now, let's leave Total Vertices as Active Vertices + Inactive Slots approximation or just remove if inaccurate.
-    // Actually, users usually care about "Rendered Vertices" (Active).
-    // Let's try to count unique attachments in the skin.
     if (skin && (skin as any).attachments) {
          const attachments = (skin as any).attachments;
          // attachments is a Map-like object in 3.8 JS
@@ -392,38 +386,38 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
 
         {/* Stats Panel */}
         {spineModel && (
-            <div className="absolute top-20 left-4 z-20 pointer-events-none">
-                <div className="bg-zinc-950/70 backdrop-blur-md border border-zinc-700/50 p-4 rounded-xl shadow-2xl text-sm space-y-4 min-w-[240px] text-zinc-100">
+            <div className="absolute top-20 left-6 z-20 pointer-events-none select-none">
+                <div className="bg-zinc-950/80 backdrop-blur-md border border-zinc-700/50 p-5 rounded-xl shadow-2xl space-y-5 min-w-[280px] text-zinc-100">
                     
                     {/* Metrics Grid */}
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 pb-2 border-b border-zinc-700/50">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 pb-4 border-b border-zinc-700/50">
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">总骨骼数</span>
-                            <span className="font-mono text-indigo-300">{stats.totalBones}</span>
+                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">总骨骼数</span>
+                            <span className="font-mono text-lg text-indigo-300">{stats.totalBones}</span>
                         </div>
                          <div className="flex flex-col">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">骨骼变换</span>
-                            <span className="font-mono text-emerald-300">{stats.activeBones}</span>
+                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">骨骼变换</span>
+                            <span className="font-mono text-lg text-emerald-300">{stats.activeBones}</span>
                         </div>
                          <div className="flex flex-col">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">总顶点数</span>
-                            <span className="font-mono text-indigo-300">{stats.totalVertices}</span>
+                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">总顶点数</span>
+                            <span className="font-mono text-lg text-indigo-300">{stats.totalVertices}</span>
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">顶点变换</span>
-                            <span className="font-mono text-emerald-300">{stats.activeVertices}</span>
+                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">顶点变换</span>
+                            <span className="font-mono text-lg text-emerald-300">{stats.activeVertices}</span>
                         </div>
                     </div>
                     
                     {/* Features & Blend Modes */}
                     {(stats.features.length > 0 || stats.blendModes.length > 0) && (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                              {stats.features.length > 0 && (
                                  <div>
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1.5">高级特性</span>
-                                    <div className="flex flex-wrap gap-1.5">
+                                    <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-2 font-semibold">高级特性</span>
+                                    <div className="flex flex-wrap gap-2">
                                         {stats.features.map(f => (
-                                            <span key={f} className="px-2 py-0.5 bg-indigo-500/20 text-indigo-200 rounded text-[11px] border border-indigo-500/30">
+                                            <span key={f} className="px-2.5 py-1 bg-indigo-500/20 text-indigo-200 rounded text-xs border border-indigo-500/30 shadow-sm">
                                                 {f}
                                             </span>
                                         ))}
@@ -433,10 +427,10 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
 
                              {stats.blendModes.length > 0 && (
                                  <div>
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1.5">叠加模式</span>
-                                    <div className="flex flex-wrap gap-1.5">
+                                    <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-2 font-semibold">叠加模式</span>
+                                    <div className="flex flex-wrap gap-2">
                                         {stats.blendModes.map(f => (
-                                            <span key={f} className="px-2 py-0.5 bg-purple-500/20 text-purple-200 rounded text-[11px] border border-purple-500/30">
+                                            <span key={f} className="px-2.5 py-1 bg-purple-500/20 text-purple-200 rounded text-xs border border-purple-500/30 shadow-sm">
                                                 {f}
                                             </span>
                                         ))}
