@@ -20,12 +20,12 @@ export class SpineLoaderService {
     // 2. Pre-load all image files once
     // This creates a pool of textures that any atlas can reference.
     const imageFiles = files.filter(f => ['png', 'jpg', 'jpeg'].includes(f.extension));
-    const loadedImages = new Map<string, HTMLImageElement>();
+    const loadedImages = new Map<string, { img: HTMLImageElement, size: number }>();
     
     await Promise.all(imageFiles.map(imgFile => new Promise<void>((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
-            loadedImages.set(imgFile.name, img);
+            loadedImages.set(imgFile.name, { img, size: imgFile.file.size });
             resolve();
         };
         img.onerror = () => {
@@ -68,7 +68,7 @@ export class SpineLoaderService {
   private static async loadSingleSpine(
     skelFile: UploadedFile, 
     atlasFile: UploadedFile, 
-    loadedImages: Map<string, HTMLImageElement>
+    loadedImages: Map<string, { img: HTMLImageElement, size: number }>
   ): Promise<SpineModel> {
     
     // Read Atlas content
@@ -78,38 +78,38 @@ export class SpineLoaderService {
     return new Promise((resolve, reject) => {
       new TextureAtlas(atlasText, (path: string, loaderFunction: (t: any) => void) => {
         // Find the matching pre-loaded image
-        let foundImage: HTMLImageElement | undefined;
+        let foundData: { img: HTMLImageElement, size: number } | undefined;
 
-        for (const [name, img] of loadedImages.entries()) {
+        for (const [name, data] of loadedImages.entries()) {
              // 1. Exact match
              if (name === path) {
-                 foundImage = img;
+                 foundData = data;
                  break;
              }
              // 2. Path ending match (common for folders where path is "images/abc.png" but file is "abc.png")
              if (name.endsWith(path) || path.endsWith(name)) {
-                 foundImage = img;
+                 foundData = data;
                  break;
              }
         }
 
-        if (!foundImage) {
+        if (!foundData) {
           // Fallback fuzzy search (contains)
-          for (const [name, img] of loadedImages.entries()) {
+          for (const [name, data] of loadedImages.entries()) {
               if (name.includes(path)) {
-                  foundImage = img;
+                  foundData = data;
                   break;
               }
           }
         }
 
-        if (!foundImage) {
+        if (!foundData) {
           reject(new Error(`无法找到纹理图片: ${path}`));
           return;
         }
 
         // Create Texture from pre-loaded image
-        const texture = PIXI.Texture.from(foundImage);
+        const texture = PIXI.Texture.from(foundData.img);
         loaderFunction(texture);
 
       }, (atlas: TextureAtlas) => {
@@ -127,15 +127,28 @@ export class SpineLoaderService {
             const skins = skeletonData.skins.map(s => s.name);
             
             // Extract Texture Info for UI
-            // We can iterate pages in the atlas to get actual used textures
-            const textureInfo: { name: string; width: number; height: number }[] = [];
+            const textureInfo: { name: string; width: number; height: number; size: number }[] = [];
+            
+            // We need to look up sizes again based on atlas pages
             for (const page of atlas.pages) {
                 if (page.baseTexture && page.baseTexture.resource && (page.baseTexture.resource as any).source) {
                     const source = (page.baseTexture.resource as any).source as HTMLImageElement;
-                     textureInfo.push({
+                    
+                    // Try to find the original size we stored
+                    let size = 0;
+                    // Reverse lookup by object reference would be ideal, but map iteration is fast enough here
+                    for(const val of loadedImages.values()) {
+                        if(val.img === source) {
+                            size = val.size;
+                            break;
+                        }
+                    }
+
+                    textureInfo.push({
                         name: page.name,
                         width: source.width,
-                        height: source.height
+                        height: source.height,
+                        size: size
                     });
                 }
             }

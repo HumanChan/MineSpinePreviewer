@@ -9,6 +9,7 @@ export interface SpineModel {
     name: string;
     width: number;
     height: number;
+    size: number; // File size in bytes
   }[];
 }
 

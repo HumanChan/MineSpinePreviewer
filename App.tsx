@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { SpineLoaderService } from './services/spineService';
 import { SpineCanvas } from './components/SpineCanvas';
 import { Controls } from './components/Controls';
@@ -6,40 +6,53 @@ import { FileDropZone } from './components/FileDropZone';
 import { SpineModel, UploadedFile, SpineLoadError } from './types';
 import { AlertTriangle } from 'lucide-react';
 
+// Per-model state storage
+interface ModelState {
+    animation: string;
+    timeScale: number;
+    isLooping: boolean;
+}
+
 const App: React.FC = () => {
   // State for multiple models
   const [loadedModels, setLoadedModels] = useState<SpineModel[]>([]);
   const [activeModelIndex, setActiveModelIndex] = useState<number>(0);
   
-  // Current Active Model Derived State
-  const activeModel = loadedModels[activeModelIndex] || null;
+  // Stored states for each model (key can be model name or index, we use index for simplicity here relative to loadedModels list)
+  // Warning: If models are reloaded, this resets.
+  const [modelStates, setModelStates] = useState<Record<number, ModelState>>({});
 
   const [currentAnimation, setCurrentAnimation] = useState<string>('');
   const [timeScale, setTimeScale] = useState<number>(1.0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isLooping, setIsLooping] = useState<boolean>(true);
+  
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<SpineLoadError | null>(null);
   const [bgColor, setBgColor] = useState<string>('#18181b'); // Default zinc-900
+
+  // Current Active Model Derived State
+  const activeModel = loadedModels[activeModelIndex] || null;
 
   const handleFilesLoaded = useCallback(async (files: UploadedFile[]) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Expect an array of models now
       const models = await SpineLoaderService.loadSpineFromFiles(files);
       setLoadedModels(models);
       setActiveModelIndex(0);
+      setModelStates({}); // Reset saved states on new load
       
-      // Initialize animation for the first model
+      // Initialize first model state
       if (models.length > 0) {
           const firstModel = models[0];
-          if (firstModel.animations.length > 0) {
-            const defaultAnim = firstModel.animations.find(a => a.toLowerCase().includes('idle')) || firstModel.animations[0];
-            setCurrentAnimation(defaultAnim);
-          } else {
-            setCurrentAnimation('');
-          }
+          const defaultAnim = firstModel.animations.length > 0 
+            ? (firstModel.animations.find(a => a.toLowerCase().includes('idle')) || firstModel.animations[0])
+            : '';
+          
+          setCurrentAnimation(defaultAnim);
+          setTimeScale(1.0);
+          setIsLooping(true);
       }
 
     } catch (err: any) {
@@ -53,16 +66,39 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleModelChange = (index: number) => {
-      if (index >= 0 && index < loadedModels.length) {
-          setActiveModelIndex(index);
-          // Reset animation choice for new model
-          const model = loadedModels[index];
-          if (model.animations.length > 0) {
-            const defaultAnim = model.animations.find(a => a.toLowerCase().includes('idle')) || model.animations[0];
-            setCurrentAnimation(defaultAnim);
+  // Handle Model Switching
+  const handleModelChange = (newIndex: number) => {
+      if (newIndex === activeModelIndex) return;
+      if (newIndex >= 0 && newIndex < loadedModels.length) {
+          
+          // 1. Save current state
+          const currentState: ModelState = {
+              animation: currentAnimation,
+              timeScale,
+              isLooping
+          };
+          
+          const updatedStates = { ...modelStates, [activeModelIndex]: currentState };
+          
+          // 2. Load next state (or default)
+          const nextModel = loadedModels[newIndex];
+          const savedState = updatedStates[newIndex];
+
+          setActiveModelIndex(newIndex);
+          setModelStates(updatedStates);
+
+          if (savedState) {
+              setCurrentAnimation(savedState.animation);
+              setTimeScale(savedState.timeScale);
+              setIsLooping(savedState.isLooping);
           } else {
-            setCurrentAnimation('');
+              // Defaults if visited for first time
+              const defaultAnim = nextModel.animations.length > 0 
+                ? (nextModel.animations.find(a => a.toLowerCase().includes('idle')) || nextModel.animations[0])
+                : '';
+              setCurrentAnimation(defaultAnim);
+              setTimeScale(1.0);
+              setIsLooping(true);
           }
       }
   };
@@ -72,10 +108,8 @@ const App: React.FC = () => {
   };
 
   const handleResetView = () => {
-      // Force a re-mount of canvas to reset camera/pan/zoom
-      // We can achieve this by briefly setting models to same instance or toggling a key
-      // Or cleaner: pass a timestamp to component to trigger reset
       if (loadedModels.length > 0) {
+         // Force remount by creating new array ref
          setLoadedModels([...loadedModels]); 
       }
   };
@@ -83,12 +117,7 @@ const App: React.FC = () => {
   const handleClose = () => {
       setLoadedModels([]);
       setActiveModelIndex(0);
-      setSpineModel(null); // Clear ref
-  };
-
-  // Helper for type safety
-  const setSpineModel = (val: null) => {
-      if (val === null) setLoadedModels([]);
+      setModelStates({});
   };
 
   return (
@@ -99,7 +128,6 @@ const App: React.FC = () => {
         
         {/* Top Bar / Toolbar */}
         <div className="h-14 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-sm flex items-center justify-between px-6 absolute top-0 left-0 right-0 z-10 pointer-events-none">
-            {/* Pointer events none allows clicking through to canvas if needed, but buttons need pointer-events-auto */}
             <div className="flex items-center gap-3 pointer-events-auto">
                 <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Spine 预览器</span>
                 <span className="px-2 py-0.5 rounded text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">v3.8</span>

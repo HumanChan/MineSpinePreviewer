@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Play, Pause, AlertCircle, Layers, RotateCcw, Repeat, Image as ImageIcon, Box } from 'lucide-react';
 import { SpineModel } from '../types';
 
@@ -37,6 +37,15 @@ export const Controls: React.FC<ControlsProps> = ({
   onResetView,
   spineModel
 }) => {
+  const activeAnimRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-scroll to active animation when the list changes or selection changes
+  useEffect(() => {
+      if (activeAnimRef.current) {
+          activeAnimRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+  }, [currentAnimation, selectedModelIndex]); // Run when animation or model changes
+
   return (
     <div className="w-80 h-full bg-zinc-900 border-l border-zinc-800 flex flex-col shadow-xl z-10 text-sm">
       
@@ -64,22 +73,6 @@ export const Controls: React.FC<ControlsProps> = ({
                <div className="text-zinc-500 text-sm italic">未加载模型</div>
            )}
         </div>
-        
-        {/* Texture Info */}
-        {spineModel && spineModel.textureInfo.length > 0 && (
-          <div className="pt-2 border-t border-zinc-800/50">
-             <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">纹理信息</div>
-             <div className="space-y-1 max-h-20 overflow-y-auto custom-scrollbar">
-                {spineModel.textureInfo.map((tex, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-xs text-zinc-400">
-                    <ImageIcon size={12} className="shrink-0" />
-                    <span className="truncate flex-1" title={tex.name}>{tex.name}</span>
-                    <span className="text-zinc-500 whitespace-nowrap">{tex.width} x {tex.height}</span>
-                    </div>
-                ))}
-             </div>
-          </div>
-        )}
       </div>
 
       {/* Scrollable Content */}
@@ -93,26 +86,30 @@ export const Controls: React.FC<ControlsProps> = ({
                 </h3>
             </div>
           
-          <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-1 max-h-80 overflow-y-auto pr-2 custom-scrollbar bg-zinc-950/30 p-2 rounded-lg border border-zinc-800/50">
             {animations.length === 0 ? (
                 <div className="text-zinc-600 italic px-2">未找到动作</div>
             ) : (
-                animations.map((anim) => (
-                <button
-                    key={anim}
-                    onClick={() => onAnimationChange(anim)}
-                    className={`
-                    w-full text-left px-3 py-2 rounded-md transition-all truncate
-                    ${currentAnimation === anim 
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20' 
-                        : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                    }
-                    `}
-                    title={anim}
-                >
-                    {anim}
-                </button>
-                ))
+                animations.map((anim) => {
+                    const isActive = currentAnimation === anim;
+                    return (
+                        <button
+                            key={anim}
+                            ref={isActive ? activeAnimRef : null}
+                            onClick={() => onAnimationChange(anim)}
+                            className={`
+                            w-full text-left px-3 py-2 rounded-md transition-all truncate text-xs
+                            ${isActive 
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20' 
+                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                            }
+                            `}
+                            title={anim}
+                        >
+                            {anim}
+                        </button>
+                    );
+                })
             )}
           </div>
         </div>
