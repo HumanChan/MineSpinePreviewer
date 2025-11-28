@@ -127,28 +127,35 @@ export class SpineLoaderService {
             const skins = skeletonData.skins.map(s => s.name);
             
             // Extract Texture Info for UI
+            // We iterate atlas pages to be sure we list what the spine actually uses
             const textureInfo: { name: string; width: number; height: number; size: number }[] = [];
             
-            // We need to look up sizes again based on atlas pages
             for (const page of atlas.pages) {
-                if (page.baseTexture && page.baseTexture.resource && (page.baseTexture.resource as any).source) {
-                    const source = (page.baseTexture.resource as any).source as HTMLImageElement;
-                    
-                    // Try to find the original size we stored
-                    let size = 0;
-                    // Reverse lookup by object reference would be ideal, but map iteration is fast enough here
-                    for(const val of loadedImages.values()) {
-                        if(val.img === source) {
-                            size = val.size;
-                            break;
-                        }
-                    }
+                // Find matching image in loadedImages based on page name
+                let foundData: { img: HTMLImageElement, size: number } | undefined;
+                
+                for (const [name, data] of loadedImages.entries()) {
+                     if (name === page.name || name.endsWith(page.name) || page.name.endsWith(name)) {
+                         foundData = data;
+                         break;
+                     }
+                }
 
+                if (foundData) {
                     textureInfo.push({
                         name: page.name,
-                        width: source.width,
-                        height: source.height,
-                        size: size
+                        width: foundData.img.width,
+                        height: foundData.img.height,
+                        size: foundData.size
+                    });
+                } else {
+                    // Should theoretically not happen if atlas loaded successfully, 
+                    // but fallback to page dimensions if source image missing
+                    textureInfo.push({
+                        name: page.name,
+                        width: page.width,
+                        height: page.height,
+                        size: 0
                     });
                 }
             }

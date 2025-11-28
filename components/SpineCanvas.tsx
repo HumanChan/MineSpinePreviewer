@@ -291,6 +291,19 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     const spine = new Spine(spineModel.spine.skeleton.data); 
     spineRef.current = spine;
 
+    // Apply animation immediately if one is selected
+    // This fixes the issue where switching models doesn't autoplay if the animation name is preserved or re-set
+    if (animation) {
+        try {
+            spine.state.setAnimation(0, animation, loop);
+        } catch (e) {
+            console.warn("Auto-play: Animation not found:", animation);
+        }
+    }
+    
+    // Apply initial timeScale
+    spine.state.timeScale = timeScale;
+
     // Reset Container Position to Center
     const cx = appRef.current.screen.width / 2;
     const cy = appRef.current.screen.height / 2 + 200; 
@@ -307,9 +320,9 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     // Initial Stats
     updateStats();
 
-  }, [spineModel]);
+  }, [spineModel]); // Only re-run when model object changes
 
-  // Handle Animation Change
+  // Handle Animation Change (Secondary)
   useEffect(() => {
     if (!spineRef.current || !animation) return;
     try {
@@ -442,11 +455,11 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                              <div className="text-xs text-blue-400 font-bold uppercase tracking-wider mb-2 border-b border-blue-500/20 pb-1">
                                 图片资源 (Images)
                             </div>
-                            <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                            <div className="space-y-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
                                 {spineModel.textureInfo.map((tex, i) => (
-                                    <div key={i} className="flex justify-between items-center text-[10px] bg-zinc-900/50 p-1.5 rounded">
-                                        <span className="text-zinc-300 truncate max-w-[120px]" title={tex.name}>{tex.name}</span>
-                                        <div className="flex gap-2 text-zinc-500 font-mono">
+                                    <div key={i} className="flex justify-between items-center text-xs bg-zinc-900/50 p-2 rounded">
+                                        <span className="text-zinc-200 truncate max-w-[120px]" title={tex.name}>{tex.name}</span>
+                                        <div className="flex gap-2 text-zinc-400 font-mono font-medium">
                                             <span>{tex.width}x{tex.height}</span>
                                             <span>{formatBytes(tex.size)}</span>
                                         </div>
