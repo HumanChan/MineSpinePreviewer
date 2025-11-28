@@ -283,12 +283,36 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
         const boneFillAlpha = 0.35;
         const boneLineColor = 0x00FFFF;
 
-        // 1.1 Draw Hierarchy Lines First (Behind bones)
-        graphics.lineStyle(1.5, boneColor, 0.3); // Faint hierarchy line
+        // 1.1 Draw Hierarchy Lines (Parent -> Child)
         for (const bone of skeleton.bones) {
             if (bone.parent) {
-                graphics.moveTo(bone.parent.worldX, bone.parent.worldY);
-                graphics.lineTo(bone.worldX, bone.worldY);
+                const px = bone.parent.worldX;
+                const py = bone.parent.worldY;
+                const cx = bone.worldX;
+                const cy = bone.worldY;
+                const dx = cx - px;
+                const dy = cy - py;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                // Only draw if there is a noticeable distance
+                if (dist > 4) {
+                    const nx = -dy / dist;
+                    const ny = dx / dist;
+                    const w = 1.5; // Half width at base (Parent)
+                    
+                    // Draw tapered triangle (Wedge)
+                    graphics.lineStyle(0);
+                    graphics.beginFill(boneColor, 0.15); // Very faint fill
+                    graphics.moveTo(px + nx * w, py + ny * w);
+                    graphics.lineTo(px - nx * w, py - ny * w);
+                    graphics.lineTo(cx, cy); // Tip at child
+                    graphics.endFill();
+
+                    // Draw thin center line
+                    graphics.lineStyle(1, boneColor, 0.3);
+                    graphics.moveTo(px, py);
+                    graphics.lineTo(cx, cy);
+                }
             }
         }
 
@@ -318,7 +342,6 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                 });
 
                 // Calculate vertices
-                // P1: Origin (already x,y)
                 // P2: Top Shoulder
                 const p2 = transform(shoulderPos, baseWidth / 2);
                 // P3: Tip
@@ -340,15 +363,15 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                 graphics.endFill();
 
                 // Draw Pivot Joint (Hollow/Dark Circle) at Root
-                graphics.lineStyle(1.5, boneColor, 1);
+                graphics.lineStyle(1, boneColor, 1);
                 graphics.beginFill(0x000000, 0.5); 
-                graphics.drawCircle(x, y, 3);
+                graphics.drawCircle(x, y, 1.5); // Reduced size
                 graphics.endFill();
 
             } else {
                 // 0-length bone (Control/IK point)
                 // Draw Target Circle with X
-                const radius = 5;
+                const radius = 3; // Reduced size
                 
                 graphics.lineStyle(1.5, boneColor, boneAlpha);
                 graphics.beginFill(boneColor, 0.1); 
@@ -356,7 +379,7 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                 graphics.endFill();
 
                 // X inside
-                const d = radius * 0.4;
+                const d = radius * 0.5;
                 graphics.moveTo(x - d, y - d);
                 graphics.lineTo(x + d, y + d);
                 graphics.moveTo(x + d, y - d);
