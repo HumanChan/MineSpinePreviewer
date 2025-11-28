@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Play, Pause, AlertCircle, Layers, Repeat, Box, Search, X } from 'lucide-react';
-import { SpineModel } from '../types';
+import { Play, Pause, AlertCircle, Layers, Repeat, Box, Search, X, Bug } from 'lucide-react';
+import { SpineModel, SpineDebugConfig } from '../types';
 
 interface ControlsProps {
   // Model selection
@@ -18,6 +18,10 @@ interface ControlsProps {
   timeScale: number;
   onTimeScaleChange: (scale: number) => void;
   spineModel: SpineModel | null;
+
+  // Debug
+  debugConfig: SpineDebugConfig;
+  onDebugConfigChange: (config: SpineDebugConfig) => void;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -33,7 +37,9 @@ export const Controls: React.FC<ControlsProps> = ({
   onToggleLoop,
   timeScale,
   onTimeScaleChange,
-  spineModel
+  spineModel,
+  debugConfig,
+  onDebugConfigChange
 }) => {
   const activeAnimRef = useRef<HTMLButtonElement>(null);
   const [modelSearch, setModelSearch] = useState('');
@@ -51,6 +57,13 @@ export const Controls: React.FC<ControlsProps> = ({
       .map((model, index) => ({ model, index }))
       .filter(item => item.model.name.toLowerCase().includes(modelSearch.toLowerCase()));
   }, [models, modelSearch]);
+
+  const toggleDebug = (key: keyof SpineDebugConfig) => {
+    onDebugConfigChange({
+        ...debugConfig,
+        [key]: !debugConfig[key]
+    });
+  };
 
   return (
     <div className="w-80 h-full bg-zinc-900 border-l border-zinc-800 flex flex-col shadow-xl z-10 text-sm">
@@ -218,6 +231,43 @@ export const Controls: React.FC<ControlsProps> = ({
                     </button>
                   ))}
                 </div>
+            </div>
+        </div>
+
+        {/* Debug Controls */}
+        <div className="space-y-3 pt-4 border-t border-zinc-800">
+            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                <Bug size={14} /> 调试视图 (Debug)
+            </h3>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+                <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    <input type="checkbox" checked={debugConfig.bones} onChange={() => toggleDebug('bones')} className="rounded bg-zinc-800 border-zinc-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900" />
+                    显示骨骼 (Bones)
+                </label>
+                <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    <input type="checkbox" checked={debugConfig.regions} onChange={() => toggleDebug('regions')} className="rounded bg-zinc-800 border-zinc-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900" />
+                    区域附件 (Region)
+                </label>
+                <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    <input type="checkbox" checked={debugConfig.meshHull} onChange={() => toggleDebug('meshHull')} className="rounded bg-zinc-800 border-zinc-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900" />
+                    网格轮廓 (Hull)
+                </label>
+                <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    <input type="checkbox" checked={debugConfig.meshTriangles} onChange={() => toggleDebug('meshTriangles')} className="rounded bg-zinc-800 border-zinc-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900" />
+                    网格三角形 (Tris)
+                </label>
+                <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    <input type="checkbox" checked={debugConfig.clipping} onChange={() => toggleDebug('clipping')} className="rounded bg-zinc-800 border-zinc-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900" />
+                    剪裁 (Clipping)
+                </label>
+                <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    <input type="checkbox" checked={debugConfig.paths} onChange={() => toggleDebug('paths')} className="rounded bg-zinc-800 border-zinc-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900" />
+                    路径 (Paths)
+                </label>
+                <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    <input type="checkbox" checked={debugConfig.boundingBoxes} onChange={() => toggleDebug('boundingBoxes')} className="rounded bg-zinc-800 border-zinc-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900" />
+                    包围盒 (Bounds)
+                </label>
             </div>
         </div>
 

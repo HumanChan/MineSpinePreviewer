@@ -26,3 +26,13 @@ export interface SpineLoadError {
 }
 
 export type ScaleMode = 'fit' | 'fill' | '1x';
+
+export interface SpineDebugConfig {
+  bones: boolean;
+  regions: boolean;
+  meshHull: boolean;
+  meshTriangles: boolean;
+  clipping: boolean;
+  paths: boolean;
+  boundingBoxes: boolean;
+}

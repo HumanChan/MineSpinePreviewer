@@ -3,7 +3,7 @@ import { SpineLoaderService } from './services/spineService';
 import { SpineCanvas } from './components/SpineCanvas';
 import { Controls } from './components/Controls';
 import { FileDropZone } from './components/FileDropZone';
-import { SpineModel, UploadedFile, SpineLoadError } from './types';
+import { SpineModel, UploadedFile, SpineLoadError, SpineDebugConfig } from './types';
 import { AlertTriangle } from 'lucide-react';
 
 // Per-model state storage
@@ -11,6 +11,7 @@ interface ModelState {
     animation: string;
     timeScale: number;
     isLooping: boolean;
+    debugConfig?: SpineDebugConfig;
 }
 
 const App: React.FC = () => {
@@ -18,14 +19,24 @@ const App: React.FC = () => {
   const [loadedModels, setLoadedModels] = useState<SpineModel[]>([]);
   const [activeModelIndex, setActiveModelIndex] = useState<number>(0);
   
-  // Stored states for each model (key can be model name or index, we use index for simplicity here relative to loadedModels list)
-  // Warning: If models are reloaded, this resets.
+  // Stored states for each model
   const [modelStates, setModelStates] = useState<Record<number, ModelState>>({});
 
   const [currentAnimation, setCurrentAnimation] = useState<string>('');
   const [timeScale, setTimeScale] = useState<number>(1.0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isLooping, setIsLooping] = useState<boolean>(true);
+  
+  // Debug Configuration
+  const [debugConfig, setDebugConfig] = useState<SpineDebugConfig>({
+      bones: false,
+      regions: false,
+      meshHull: false,
+      meshTriangles: false,
+      clipping: false,
+      paths: false,
+      boundingBoxes: false,
+  });
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<SpineLoadError | null>(null);
@@ -53,6 +64,11 @@ const App: React.FC = () => {
           setCurrentAnimation(defaultAnim);
           setTimeScale(1.0);
           setIsLooping(true);
+          // Reset debug
+          setDebugConfig({
+            bones: false, regions: false, meshHull: false, meshTriangles: false,
+            clipping: false, paths: false, boundingBoxes: false
+          });
       }
 
     } catch (err: any) {
@@ -75,7 +91,8 @@ const App: React.FC = () => {
           const currentState: ModelState = {
               animation: currentAnimation,
               timeScale,
-              isLooping
+              isLooping,
+              debugConfig: { ...debugConfig }
           };
           
           const updatedStates = { ...modelStates, [activeModelIndex]: currentState };
@@ -91,6 +108,9 @@ const App: React.FC = () => {
               setCurrentAnimation(savedState.animation);
               setTimeScale(savedState.timeScale);
               setIsLooping(savedState.isLooping);
+              if (savedState.debugConfig) {
+                  setDebugConfig(savedState.debugConfig);
+              }
           } else {
               // Defaults if visited for first time
               const defaultAnim = nextModel.animations.length > 0 
@@ -99,6 +119,10 @@ const App: React.FC = () => {
               setCurrentAnimation(defaultAnim);
               setTimeScale(1.0);
               setIsLooping(true);
+              setDebugConfig({
+                bones: false, regions: false, meshHull: false, meshTriangles: false,
+                clipping: false, paths: false, boundingBoxes: false
+              });
           }
       }
   };
@@ -158,6 +182,7 @@ const App: React.FC = () => {
               timeScale={isPlaying ? timeScale : 0}
               loop={isLooping}
               backgroundColor={bgColor}
+              debugConfig={debugConfig}
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-8 z-20">
@@ -205,6 +230,9 @@ const App: React.FC = () => {
         timeScale={timeScale}
         onTimeScaleChange={setTimeScale}
         spineModel={activeModel}
+        
+        debugConfig={debugConfig}
+        onDebugConfigChange={setDebugConfig}
       />
 
     </div>
