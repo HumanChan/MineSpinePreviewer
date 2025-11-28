@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Play, Pause, AlertCircle, Layers, RotateCcw, Repeat, Box, Search, X } from 'lucide-react';
+import { Play, Pause, AlertCircle, Layers, Repeat, Box, Search, X } from 'lucide-react';
 import { SpineModel } from '../types';
 
 interface ControlsProps {
@@ -17,7 +17,6 @@ interface ControlsProps {
   onToggleLoop: () => void;
   timeScale: number;
   onTimeScaleChange: (scale: number) => void;
-  onResetView: () => void;
   spineModel: SpineModel | null;
 }
 
@@ -34,7 +33,6 @@ export const Controls: React.FC<ControlsProps> = ({
   onToggleLoop,
   timeScale,
   onTimeScaleChange,
-  onResetView,
   spineModel
 }) => {
   const activeAnimRef = useRef<HTMLButtonElement>(null);
@@ -221,18 +219,6 @@ export const Controls: React.FC<ControlsProps> = ({
                   ))}
                 </div>
             </div>
-        </div>
-
-        {/* View Settings */}
-        <div className="space-y-4 pt-4 border-t border-zinc-800">
-             <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">视图选项</h3>
-             
-             <button
-                onClick={onResetView}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors border border-zinc-800"
-             >
-                 <RotateCcw size={14}/> 重置视角
-             </button>
         </div>
 
       </div>

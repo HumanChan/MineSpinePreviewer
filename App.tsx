@@ -107,13 +107,6 @@ const App: React.FC = () => {
     setIsPlaying(!isPlaying);
   };
 
-  const handleResetView = () => {
-      if (loadedModels.length > 0) {
-         // Force remount by creating new array ref
-         setLoadedModels([...loadedModels]); 
-      }
-  };
-
   const handleClose = () => {
       setLoadedModels([]);
       setActiveModelIndex(0);
@@ -211,7 +204,6 @@ const App: React.FC = () => {
         onToggleLoop={() => setIsLooping(!isLooping)}
         timeScale={timeScale}
         onTimeScaleChange={setTimeScale}
-        onResetView={handleResetView}
         spineModel={activeModel}
       />
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { Spine, RegionAttachment, MeshAttachment, ClippingAttachment } from '@pixi-spine/runtime-3.8';
 import { SpineModel } from '../types';
+import { RotateCcw } from 'lucide-react';
 
 interface SpineCanvasProps {
   spineModel: SpineModel | null;
@@ -368,6 +369,14 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
       mainContainerRef.current.scale.set(newScale);
   };
 
+  const handleResetZoom = () => {
+    if (!mainContainerRef.current || !appRef.current) return;
+    const cx = appRef.current.screen.width / 2;
+    const cy = appRef.current.screen.height / 2 + 200;
+    mainContainerRef.current.scale.set(1);
+    mainContainerRef.current.position.set(cx, cy);
+  };
+
   return (
     <div 
         ref={containerRef} 
@@ -398,7 +407,7 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                         <div className="grid grid-cols-3 gap-2">
                              <div>
                                 <div className="text-[10px] text-zinc-500">骨骼数</div>
-                                <div className="font-mono text-base">{stats.totalBones}</div>
+                                <div className={`font-mono text-base ${stats.totalBones > 500 ? 'text-red-500 font-bold' : ''}`}>{stats.totalBones}</div>
                              </div>
                              <div>
                                 <div className="text-[10px] text-zinc-500">插槽数</div>
@@ -419,7 +428,7 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                         <div className="grid grid-cols-2 gap-2">
                              <div>
                                 <div className="text-[10px] text-zinc-500">渲染顶点数</div>
-                                <div className="font-mono text-base">{stats.activeVertices}</div>
+                                <div className={`font-mono text-base ${stats.activeVertices > 1000 ? 'text-red-500 font-bold' : ''}`}>{stats.activeVertices}</div>
                              </div>
                              <div>
                                 <div className="text-[10px] text-zinc-500">渲染三角形</div>
@@ -436,12 +445,12 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                                 {stats.features.map(f => (
-                                    <span key={f} className="px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded text-[10px] border border-zinc-700">
+                                    <span key={f} className="px-2 py-0.5 bg-red-900/40 text-red-200 font-semibold rounded text-[10px] border border-red-500/40">
                                         {f}
                                     </span>
                                 ))}
                                 {stats.blendModes.map(f => (
-                                    <span key={f} className="px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded text-[10px] border border-purple-500/30">
+                                    <span key={f} className="px-2 py-0.5 bg-red-900/40 text-red-200 font-semibold rounded text-[10px] border border-red-500/40">
                                         {f}
                                     </span>
                                 ))}
@@ -456,20 +465,36 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                                 图片资源 (Images)
                             </div>
                             <div className="space-y-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-                                {spineModel.textureInfo.map((tex, i) => (
-                                    <div key={i} className="flex justify-between items-center text-xs bg-zinc-900/50 p-2 rounded">
-                                        <span className="text-zinc-200 truncate max-w-[120px]" title={tex.name}>{tex.name}</span>
-                                        <div className="flex gap-2 text-zinc-400 font-mono font-medium">
-                                            <span>{tex.width}x{tex.height}</span>
-                                            <span>{formatBytes(tex.size)}</span>
+                                {spineModel.textureInfo.map((tex, i) => {
+                                    const isLargeDim = tex.width > 1024 || tex.height > 1024;
+                                    const isLargeSize = tex.size > 2 * 1024 * 1024; // 2MB
+                                    return (
+                                        <div key={i} className="flex justify-between items-center text-xs bg-zinc-900/50 p-2 rounded">
+                                            <span className="text-zinc-200 truncate max-w-[120px]" title={tex.name}>{tex.name}</span>
+                                            <div className="flex gap-2 text-zinc-400 font-mono font-medium">
+                                                <span className={isLargeDim ? 'text-red-500 font-bold' : ''}>{tex.width}x{tex.height}</span>
+                                                <span className={isLargeSize ? 'text-red-500 font-bold' : ''}>{formatBytes(tex.size)}</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
 
                 </div>
+            </div>
+        )}
+
+        {/* Bottom Left Controls */}
+        {spineModel && (
+            <div className="absolute bottom-4 left-6 z-20">
+                <button
+                    onClick={handleResetZoom}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800/80 backdrop-blur border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700 rounded-full shadow-lg transition-all text-xs font-medium"
+                >
+                    <RotateCcw size={14} /> 重置缩放
+                </button>
             </div>
         )}
     </div>
