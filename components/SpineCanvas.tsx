@@ -280,64 +280,74 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     if (config.bones) {
         const boneColor = 0x00FFFF; // Cyan (Reference Style)
         const boneAlpha = 1;
-        const boneFillAlpha = 0.25;
-        const boneBaseWidth = 8; // Adjust based on preference
+        const boneFillAlpha = 0.35;
+        const boneLineColor = 0x00FFFF;
 
+        // 1.1 Draw Hierarchy Lines First (Behind bones)
+        graphics.lineStyle(1.5, boneColor, 0.3); // Faint hierarchy line
+        for (const bone of skeleton.bones) {
+            if (bone.parent) {
+                graphics.moveTo(bone.parent.worldX, bone.parent.worldY);
+                graphics.lineTo(bone.worldX, bone.worldY);
+            }
+        }
+
+        // 1.2 Draw Bone Shapes
         for (const bone of skeleton.bones) {
             const x = bone.worldX;
             const y = bone.worldY;
             const len = bone.data.length;
 
             if (len > 0) {
-                // Bone with length: Draw Triangle/Cone with pivot circle
-                const a = (bone as any).a;
-                const c = (bone as any).c;
-
-                // 1. Tip
-                const tipX = x + len * a;
-                const tipY = y + len * c;
-
-                // 2. Base Width Perpendicular
-                const scale = Math.sqrt(a * a + c * c);
-                let perX = 0;
-                let perY = 0;
+                // Bone with length: Draw Kite/Diamond Shape
                 
-                if (scale > 0) {
-                    const nx = a / scale;
-                    const ny = c / scale;
-                    perX = -ny * (boneBaseWidth / 2);
-                    perY = nx * (boneBaseWidth / 2);
-                }
+                // Get full matrix components for correct rotation/shear
+                const a = (bone as any).a;
+                const b = (bone as any).b; // Y-axis rotation component 1
+                const c = (bone as any).c; // X-axis rotation component 2
+                const d = (bone as any).d; // Y-axis rotation component 2
 
-                // Base points
-                const b1x = x + perX;
-                const b1y = y + perY;
-                const b2x = x - perX;
-                const b2y = y - perY;
+                // Shape Parameters (Local Space)
+                const baseWidth = 8; // Width of the bone visual
+                const shoulderPos = Math.min(len * 0.2, 12); // Distance from root to widest part
 
-                // Draw Body (Triangle)
-                graphics.lineStyle(1.5, boneColor, boneAlpha);
+                // Transform helper (Local -> World)
+                const transform = (lx: number, ly: number) => ({
+                    x: lx * a + ly * c + x,
+                    y: lx * b + ly * d + y
+                });
+
+                // Calculate vertices
+                // P1: Origin (already x,y)
+                // P2: Top Shoulder
+                const p2 = transform(shoulderPos, baseWidth / 2);
+                // P3: Tip
+                const p3 = transform(len, 0);
+                // P4: Bottom Shoulder
+                const p4 = transform(shoulderPos, -baseWidth / 2);
+
+                // Draw Polygon
+                graphics.lineStyle(1.5, boneLineColor, 0.8);
                 graphics.beginFill(boneColor, boneFillAlpha);
-                graphics.moveTo(b1x, b1y);
-                graphics.lineTo(tipX, tipY);
-                graphics.lineTo(b2x, b2y);
-                graphics.closePath(); // Close base
+                
+                graphics.moveTo(x, y); // Start
+                graphics.lineTo(p2.x, p2.y);
+                graphics.lineTo(p3.x, p3.y);
+                graphics.lineTo(p4.x, p4.y);
+                graphics.lineTo(x, y); // Close loop
+                
+                graphics.closePath();
                 graphics.endFill();
 
-                // Draw Center Line (Spine of the bone)
-                graphics.lineStyle(1, boneColor, 0.6);
-                graphics.moveTo(x, y);
-                graphics.lineTo(tipX, tipY);
-
-                // Draw Pivot Joint (Hollow/Dark Circle)
-                graphics.lineStyle(1.5, boneColor, boneAlpha);
-                graphics.beginFill(0x000000, 0.6); // Dark fill for joint "hole" look
+                // Draw Pivot Joint (Hollow/Dark Circle) at Root
+                graphics.lineStyle(1.5, boneColor, 1);
+                graphics.beginFill(0x000000, 0.5); 
                 graphics.drawCircle(x, y, 3);
                 graphics.endFill();
 
             } else {
                 // 0-length bone (Control/IK point)
-                // Draw Circle with 'X'
+                // Draw Target Circle with X
                 const radius = 5;
                 
                 graphics.lineStyle(1.5, boneColor, boneAlpha);
@@ -345,8 +355,8 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                 graphics.drawCircle(x, y, radius);
                 graphics.endFill();
 
-                // Draw 'X' inside
-                const d = radius * 0.5;
+                // X inside
+                const d = radius * 0.4;
                 graphics.moveTo(x - d, y - d);
                 graphics.lineTo(x + d, y + d);
                 graphics.moveTo(x + d, y - d);
