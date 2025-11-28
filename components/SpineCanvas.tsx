@@ -301,8 +301,9 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     spine.y = 0;
     
     // Initial Scale 
-    spine.scale.set(0.5);
-
+    // REMOVED explicit scaling to 0.5 to ensure 1:1 pixel match with ruler
+    // spine.scale.set(0.5); 
+    
     // Add Spine ON TOP of axes
     mainContainerRef.current.addChild(spine as any);
 
@@ -387,25 +388,25 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
         {/* Stats Panel */}
         {spineModel && (
             <div className="absolute top-20 left-6 z-20 pointer-events-none select-none">
-                <div className="bg-zinc-950/80 backdrop-blur-md border border-zinc-700/50 p-5 rounded-xl shadow-2xl space-y-5 min-w-[280px] text-zinc-100">
+                <div className="bg-zinc-950/80 backdrop-blur-md border border-zinc-700/50 p-6 rounded-xl shadow-2xl space-y-6 min-w-[320px] text-zinc-100">
                     
                     {/* Metrics Grid */}
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 pb-4 border-b border-zinc-700/50">
+                    <div className="grid grid-cols-2 gap-x-10 gap-y-6 pb-4 border-b border-zinc-700/50">
                         <div className="flex flex-col">
-                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">总骨骼数</span>
-                            <span className="font-mono text-lg text-indigo-300">{stats.totalBones}</span>
+                            <span className="text-sm text-zinc-500 uppercase tracking-wider font-semibold">总骨骼数</span>
+                            <span className="font-mono text-xl text-indigo-300">{stats.totalBones}</span>
                         </div>
                          <div className="flex flex-col">
-                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">骨骼变换</span>
-                            <span className="font-mono text-lg text-emerald-300">{stats.activeBones}</span>
+                            <span className="text-sm text-zinc-500 uppercase tracking-wider font-semibold">骨骼变换数</span>
+                            <span className="font-mono text-xl text-emerald-300">{stats.activeBones}</span>
                         </div>
                          <div className="flex flex-col">
-                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">总顶点数</span>
-                            <span className="font-mono text-lg text-indigo-300">{stats.totalVertices}</span>
+                            <span className="text-sm text-zinc-500 uppercase tracking-wider font-semibold">总顶点数</span>
+                            <span className="font-mono text-xl text-indigo-300">{stats.totalVertices}</span>
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">顶点变换</span>
-                            <span className="font-mono text-lg text-emerald-300">{stats.activeVertices}</span>
+                            <span className="text-sm text-zinc-500 uppercase tracking-wider font-semibold">顶点变换数</span>
+                            <span className="font-mono text-xl text-emerald-300">{stats.activeVertices}</span>
                         </div>
                     </div>
                     
@@ -414,10 +415,10 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                         <div className="space-y-4">
                              {stats.features.length > 0 && (
                                  <div>
-                                    <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-2 font-semibold">高级特性</span>
+                                    <span className="text-sm text-zinc-500 uppercase tracking-wider block mb-2 font-semibold">高级特性</span>
                                     <div className="flex flex-wrap gap-2">
                                         {stats.features.map(f => (
-                                            <span key={f} className="px-2.5 py-1 bg-indigo-500/20 text-indigo-200 rounded text-xs border border-indigo-500/30 shadow-sm">
+                                            <span key={f} className="px-3 py-1 bg-indigo-500/20 text-indigo-200 rounded text-sm border border-indigo-500/30 shadow-sm">
                                                 {f}
                                             </span>
                                         ))}
@@ -427,10 +428,10 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
 
                              {stats.blendModes.length > 0 && (
                                  <div>
-                                    <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-2 font-semibold">叠加模式</span>
+                                    <span className="text-sm text-zinc-500 uppercase tracking-wider block mb-2 font-semibold">叠加模式</span>
                                     <div className="flex flex-wrap gap-2">
                                         {stats.blendModes.map(f => (
-                                            <span key={f} className="px-2.5 py-1 bg-purple-500/20 text-purple-200 rounded text-xs border border-purple-500/30 shadow-sm">
+                                            <span key={f} className="px-3 py-1 bg-purple-500/20 text-purple-200 rounded text-sm border border-purple-500/30 shadow-sm">
                                                 {f}
                                             </span>
                                         ))}

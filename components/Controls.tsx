@@ -1,8 +1,13 @@
 import React from 'react';
-import { Play, Pause, AlertCircle, Layers, RotateCcw, Repeat, Image as ImageIcon } from 'lucide-react';
+import { Play, Pause, AlertCircle, Layers, RotateCcw, Repeat, Image as ImageIcon, Box } from 'lucide-react';
 import { SpineModel } from '../types';
 
 interface ControlsProps {
+  // Model selection
+  models: SpineModel[];
+  selectedModelIndex: number;
+  onSelectModel: (index: number) => void;
+
   animations: string[];
   currentAnimation: string;
   onAnimationChange: (anim: string) => void;
@@ -17,6 +22,9 @@ interface ControlsProps {
 }
 
 export const Controls: React.FC<ControlsProps> = ({
+  models,
+  selectedModelIndex,
+  onSelectModel,
   animations,
   currentAnimation,
   onAnimationChange,
@@ -33,22 +41,43 @@ export const Controls: React.FC<ControlsProps> = ({
     <div className="w-80 h-full bg-zinc-900 border-l border-zinc-800 flex flex-col shadow-xl z-10 text-sm">
       
       {/* Header */}
-      <div className="p-4 border-b border-zinc-800 bg-zinc-900">
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">当前模型</h2>
-        <div className="text-white font-medium truncate" title={spineModel?.name || "未加载模型"}>
-          {spineModel?.name || "未加载模型"}
+      <div className="p-4 border-b border-zinc-800 bg-zinc-900 space-y-4">
+        
+        {/* Model Switcher */}
+        <div>
+           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+             <Box size={14}/> 模型选择 ({models.length})
+           </h2>
+           {models.length > 0 ? (
+               <select 
+                  value={selectedModelIndex}
+                  onChange={(e) => onSelectModel(Number(e.target.value))}
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+               >
+                 {models.map((m, idx) => (
+                    <option key={idx} value={idx}>
+                      {m.name}
+                    </option>
+                 ))}
+               </select>
+           ) : (
+               <div className="text-zinc-500 text-sm italic">未加载模型</div>
+           )}
         </div>
         
         {/* Texture Info */}
         {spineModel && spineModel.textureInfo.length > 0 && (
-          <div className="mt-2 space-y-1">
-             {spineModel.textureInfo.map((tex, idx) => (
-                <div key={idx} className="flex items-center gap-2 text-xs text-zinc-500">
-                  <ImageIcon size={12} />
-                  <span className="truncate max-w-[150px]">{tex.name}</span>
-                  <span className="text-zinc-400">({tex.width} x {tex.height})</span>
-                </div>
-             ))}
+          <div className="pt-2 border-t border-zinc-800/50">
+             <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">纹理信息</div>
+             <div className="space-y-1 max-h-20 overflow-y-auto custom-scrollbar">
+                {spineModel.textureInfo.map((tex, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs text-zinc-400">
+                    <ImageIcon size={12} className="shrink-0" />
+                    <span className="truncate flex-1" title={tex.name}>{tex.name}</span>
+                    <span className="text-zinc-500 whitespace-nowrap">{tex.width} x {tex.height}</span>
+                    </div>
+                ))}
+             </div>
           </div>
         )}
       </div>

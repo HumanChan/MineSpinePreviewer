@@ -7,7 +7,13 @@ import { SpineModel, UploadedFile, SpineLoadError } from './types';
 import { AlertTriangle } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [spineModel, setSpineModel] = useState<SpineModel | null>(null);
+  // State for multiple models
+  const [loadedModels, setLoadedModels] = useState<SpineModel[]>([]);
+  const [activeModelIndex, setActiveModelIndex] = useState<number>(0);
+  
+  // Current Active Model Derived State
+  const activeModel = loadedModels[activeModelIndex] || null;
+
   const [currentAnimation, setCurrentAnimation] = useState<string>('');
   const [timeScale, setTimeScale] = useState<number>(1.0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
@@ -20,16 +26,20 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const model = await SpineLoaderService.loadSpineFromFiles(files);
-      setSpineModel(model);
+      // Expect an array of models now
+      const models = await SpineLoaderService.loadSpineFromFiles(files);
+      setLoadedModels(models);
+      setActiveModelIndex(0);
       
-      // Set default animation
-      if (model.animations.length > 0) {
-        // Prefer 'idle' or 'run' if available, else first
-        const defaultAnim = model.animations.find(a => a.toLowerCase().includes('idle')) || model.animations[0];
-        setCurrentAnimation(defaultAnim);
-      } else {
-          setCurrentAnimation('');
+      // Initialize animation for the first model
+      if (models.length > 0) {
+          const firstModel = models[0];
+          if (firstModel.animations.length > 0) {
+            const defaultAnim = firstModel.animations.find(a => a.toLowerCase().includes('idle')) || firstModel.animations[0];
+            setCurrentAnimation(defaultAnim);
+          } else {
+            setCurrentAnimation('');
+          }
       }
 
     } catch (err: any) {
@@ -43,15 +53,42 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleModelChange = (index: number) => {
+      if (index >= 0 && index < loadedModels.length) {
+          setActiveModelIndex(index);
+          // Reset animation choice for new model
+          const model = loadedModels[index];
+          if (model.animations.length > 0) {
+            const defaultAnim = model.animations.find(a => a.toLowerCase().includes('idle')) || model.animations[0];
+            setCurrentAnimation(defaultAnim);
+          } else {
+            setCurrentAnimation('');
+          }
+      }
+  };
+
   const handleTogglePlay = () => {
     setIsPlaying(!isPlaying);
   };
 
   const handleResetView = () => {
       // Force a re-mount of canvas to reset camera/pan/zoom
-      if (spineModel) {
-        setSpineModel({ ...spineModel });
+      // We can achieve this by briefly setting models to same instance or toggling a key
+      // Or cleaner: pass a timestamp to component to trigger reset
+      if (loadedModels.length > 0) {
+         setLoadedModels([...loadedModels]); 
       }
+  };
+
+  const handleClose = () => {
+      setLoadedModels([]);
+      setActiveModelIndex(0);
+      setSpineModel(null); // Clear ref
+  };
+
+  // Helper for type safety
+  const setSpineModel = (val: null) => {
+      if (val === null) setLoadedModels([]);
   };
 
   return (
@@ -80,9 +117,9 @@ const App: React.FC = () => {
                     </button>
                 </div>
                 
-                {spineModel && (
+                {activeModel && (
                   <button 
-                    onClick={() => setSpineModel(null)}
+                    onClick={handleClose}
                     className="text-xs text-red-400 hover:text-red-300 transition-colors bg-red-900/20 px-2 py-1 rounded border border-red-900/50"
                   >
                     关闭文件
@@ -93,9 +130,9 @@ const App: React.FC = () => {
 
         {/* Content */}
         <div className="flex-1 relative">
-          {spineModel ? (
+          {activeModel ? (
             <SpineCanvas 
-              spineModel={spineModel}
+              spineModel={activeModel}
               animation={currentAnimation}
               timeScale={isPlaying ? timeScale : 0}
               loop={isLooping}
@@ -133,7 +170,11 @@ const App: React.FC = () => {
 
       {/* Sidebar Controls */}
       <Controls 
-        animations={spineModel?.animations || []}
+        models={loadedModels}
+        selectedModelIndex={activeModelIndex}
+        onSelectModel={handleModelChange}
+        
+        animations={activeModel?.animations || []}
         currentAnimation={currentAnimation}
         onAnimationChange={setCurrentAnimation}
         isPlaying={isPlaying}
@@ -143,7 +184,7 @@ const App: React.FC = () => {
         timeScale={timeScale}
         onTimeScaleChange={setTimeScale}
         onResetView={handleResetView}
-        spineModel={spineModel}
+        spineModel={activeModel}
       />
 
     </div>

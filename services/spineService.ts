@@ -6,50 +6,78 @@ import { readFileAsArrayBuffer, readFileAsText } from '../utils/fileHelpers';
 
 export class SpineLoaderService {
   /**
-   * Attempts to assemble a Spine model from a collection of raw files.
-   * Looks for .skel, .atlas, and matching .png files.
+   * Attempts to assemble Spine models from a collection of raw files.
+   * Looks for all .skel files and pairs them with matching .atlas files.
+   * Returns an array of successfully loaded models.
    */
-  static async loadSpineFromFiles(files: UploadedFile[]): Promise<SpineModel> {
-    // 1. Identify key files
-    const skelFile = files.find((f) => f.extension === 'skel');
-    const atlasFile = files.find((f) => f.extension === 'atlas');
+  static async loadSpineFromFiles(files: UploadedFile[]): Promise<SpineModel[]> {
+    // 1. Identify all skel files
+    const skelFiles = files.filter((f) => f.extension === 'skel');
+    if (skelFiles.length === 0) {
+      throw new Error('未找到 .skel 二进制文件。请确保上传了 Spine 3.8 格式的导出文件。');
+    }
 
-    if (!skelFile) throw new Error('Missing .skel binary file.');
-    if (!atlasFile) throw new Error('Missing .atlas file.');
-
-    // 2. Read Atlas content
-    const atlasText = await readFileAsText(atlasFile.file);
-
-    // 3. Pre-load all image files
-    // This ensures dimensions are ready before TextureAtlas parses them.
+    // 2. Pre-load all image files once
+    // This creates a pool of textures that any atlas can reference.
     const imageFiles = files.filter(f => ['png', 'jpg', 'jpeg'].includes(f.extension));
     const loadedImages = new Map<string, HTMLImageElement>();
-    const textureInfo: { name: string; width: number; height: number }[] = [];
-
+    
     await Promise.all(imageFiles.map(imgFile => new Promise<void>((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
             loadedImages.set(imgFile.name, img);
-            textureInfo.push({
-                name: imgFile.name,
-                width: img.width,
-                height: img.height
-            });
             resolve();
         };
         img.onerror = () => {
-             console.error(`Failed to load image: ${imgFile.name}`);
-             reject(new Error(`Failed to load texture image: ${imgFile.name}`));
+             console.warn(`Failed to load image: ${imgFile.name}`);
+             // Don't reject entire batch just for one bad image, but log it.
+             resolve(); 
         };
         img.src = imgFile.url;
     })));
 
-    // 4. Create Texture Atlas
+    const loadedModels: SpineModel[] = [];
+    const errors: string[] = [];
+
+    // 3. Process each skeleton file
+    for (const skelFile of skelFiles) {
+      const baseName = skelFile.name.replace(/\.skel$/, '');
+      // Try to find matching atlas: "name.atlas"
+      const atlasFile = files.find(f => f.extension === 'atlas' && f.name.replace(/\.atlas$/, '') === baseName);
+
+      if (!atlasFile) {
+        errors.push(`找不到与 ${skelFile.name} 匹配的 .atlas 文件`);
+        continue;
+      }
+
+      try {
+        const model = await this.loadSingleSpine(skelFile, atlasFile, loadedImages);
+        loadedModels.push(model);
+      } catch (err: any) {
+        errors.push(`加载模型 ${baseName} 失败: ${err.message}`);
+      }
+    }
+
+    if (loadedModels.length === 0) {
+      throw new Error(errors.join('\n') || '无法加载任何模型。');
+    }
+
+    return loadedModels;
+  }
+
+  private static async loadSingleSpine(
+    skelFile: UploadedFile, 
+    atlasFile: UploadedFile, 
+    loadedImages: Map<string, HTMLImageElement>
+  ): Promise<SpineModel> {
+    
+    // Read Atlas content
+    const atlasText = await readFileAsText(atlasFile.file);
+
+    // Create Texture Atlas
     return new Promise((resolve, reject) => {
       new TextureAtlas(atlasText, (path: string, loaderFunction: (t: any) => void) => {
         // Find the matching pre-loaded image
-        // Atlas paths might be relative, e.g., "images/head.png", but our file list might be flat or different.
-        // We attempt to match by checking if the file name matches or ends with the path.
         let foundImage: HTMLImageElement | undefined;
 
         for (const [name, img] of loadedImages.entries()) {
@@ -58,7 +86,7 @@ export class SpineLoaderService {
                  foundImage = img;
                  break;
              }
-             // 2. Path ending match (common for folders)
+             // 2. Path ending match (common for folders where path is "images/abc.png" but file is "abc.png")
              if (name.endsWith(path) || path.endsWith(name)) {
                  foundImage = img;
                  break;
@@ -66,7 +94,7 @@ export class SpineLoaderService {
         }
 
         if (!foundImage) {
-          // Fallback fuzzy search
+          // Fallback fuzzy search (contains)
           for (const [name, img] of loadedImages.entries()) {
               if (name.includes(path)) {
                   foundImage = img;
@@ -76,22 +104,20 @@ export class SpineLoaderService {
         }
 
         if (!foundImage) {
-          reject(new Error(`Could not find texture image for path: ${path}`));
+          reject(new Error(`无法找到纹理图片: ${path}`));
           return;
         }
 
-        // Create Texture from pre-loaded image (Pixi v8 style)
-        // In v8, BaseTexture is removed. Texture.from handles Image/HTMLImageElement directly.
+        // Create Texture from pre-loaded image
         const texture = PIXI.Texture.from(foundImage);
         loaderFunction(texture);
 
       }, (atlas: TextureAtlas) => {
-        // 5. Atlas loaded, now load Skeleton
+        // Atlas loaded, now load Skeleton
         try {
           const atlasLoader = new AtlasAttachmentLoader(atlas);
           const skeletonBinary = new SkeletonBinary(atlasLoader);
 
-          // Need to read the .skel file as ArrayBuffer
           readFileAsArrayBuffer(skelFile.file).then((buffer) => {
             const skeletonData = skeletonBinary.readSkeletonData(new Uint8Array(buffer));
             const spine = new Spine(skeletonData);
@@ -99,6 +125,20 @@ export class SpineLoaderService {
             // Extract metadata
             const animations = skeletonData.animations.map(a => a.name);
             const skins = skeletonData.skins.map(s => s.name);
+            
+            // Extract Texture Info for UI
+            // We can iterate pages in the atlas to get actual used textures
+            const textureInfo: { name: string; width: number; height: number }[] = [];
+            for (const page of atlas.pages) {
+                if (page.baseTexture && page.baseTexture.resource && (page.baseTexture.resource as any).source) {
+                    const source = (page.baseTexture.resource as any).source as HTMLImageElement;
+                     textureInfo.push({
+                        name: page.name,
+                        width: source.width,
+                        height: source.height
+                    });
+                }
+            }
 
             resolve({
               name: skelFile.name.replace('.skel', ''),
@@ -110,7 +150,7 @@ export class SpineLoaderService {
           }).catch(reject);
 
         } catch (err) {
-          reject(new Error(`Failed to parse Skeleton Data: ${err}`));
+          reject(new Error(`解析 Skeleton Data 失败: ${err}`));
         }
       });
     });
