@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
-import { Spine, RegionAttachment, MeshAttachment, ClippingAttachment } from '@pixi-spine/runtime-3.8';
-import { SpineModel } from '../types';
+import { Spine, RegionAttachment, MeshAttachment, ClippingAttachment, PathAttachment, BoundingBoxAttachment, Skeleton } from '@pixi-spine/runtime-3.8';
+import { SpineModel, SpineDebugConfig } from '../types';
 import { RotateCcw } from 'lucide-react';
 
 interface SpineCanvasProps {
@@ -10,6 +10,7 @@ interface SpineCanvasProps {
   timeScale: number;
   loop: boolean;
   backgroundColor: string; // Hex string e.g., '#18181b'
+  debugConfig: SpineDebugConfig;
 }
 
 // Spine 3.8 Blend Mode Enum
@@ -36,13 +37,15 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
   animation, 
   timeScale, 
   loop,
-  backgroundColor 
+  backgroundColor,
+  debugConfig
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const spineRef = useRef<Spine | null>(null);
   const mainContainerRef = useRef<PIXI.Container | null>(null);
   const axesContainerRef = useRef<PIXI.Container | null>(null);
+  const debugGraphicsRef = useRef<PIXI.Graphics | null>(null);
 
   // Stats State
   const [stats, setStats] = useState({ 
@@ -267,6 +270,257 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
       return container;
   };
 
+  // Custom Debug Renderer
+  const renderDebug = (skeleton: Skeleton, graphics: PIXI.Graphics) => {
+    graphics.clear();
+    const config = debugConfig;
+    if (!config) return;
+
+    // 1. Draw Bones
+    if (config.bones) {
+        const boneColor = 0x00FFFF; // Cyan (Reference Style)
+        const boneAlpha = 1;
+        const boneFillAlpha = 0.35;
+        const boneLineColor = 0x00FFFF;
+
+        // 1.1 Draw Hierarchy Lines (Parent -> Child)
+        for (const bone of skeleton.bones) {
+            if (bone.parent) {
+                const px = bone.parent.worldX;
+                const py = bone.parent.worldY;
+                const cx = bone.worldX;
+                const cy = bone.worldY;
+                const dx = cx - px;
+                const dy = cy - py;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                // Only draw if there is a noticeable distance
+                if (dist > 4) {
+                    const nx = -dy / dist;
+                    const ny = dx / dist;
+                    const w = 1.5; // Half width at base (Parent)
+                    
+                    // Draw tapered triangle (Wedge)
+                    graphics.lineStyle(0);
+                    graphics.beginFill(boneColor, 0.15); // Very faint fill
+                    graphics.moveTo(px + nx * w, py + ny * w);
+                    graphics.lineTo(px - nx * w, py - ny * w);
+                    graphics.lineTo(cx, cy); // Tip at child
+                    graphics.endFill();
+
+                    // Draw thin center line
+                    graphics.lineStyle(1, boneColor, 0.3);
+                    graphics.moveTo(px, py);
+                    graphics.lineTo(cx, cy);
+                }
+            }
+        }
+
+        // 1.2 Draw Bone Shapes
+        for (const bone of skeleton.bones) {
+            const x = bone.worldX;
+            const y = bone.worldY;
+            const len = bone.data.length;
+
+            if (len > 0) {
+                // Bone with length: Draw Kite/Diamond Shape
+                
+                // Get full matrix components for correct rotation/shear
+                const a = (bone as any).a;
+                const b = (bone as any).b; // Y-axis rotation component 1
+                const c = (bone as any).c; // X-axis rotation component 2
+                const d = (bone as any).d; // Y-axis rotation component 2
+
+                // Shape Parameters (Local Space)
+                const baseWidth = 8; // Width of the bone visual
+                const shoulderPos = Math.min(len * 0.2, 12); // Distance from root to widest part
+
+                // Transform helper (Local -> World)
+                const transform = (lx: number, ly: number) => ({
+                    x: lx * a + ly * c + x,
+                    y: lx * b + ly * d + y
+                });
+
+                // Calculate vertices
+                // P2: Top Shoulder
+                const p2 = transform(shoulderPos, baseWidth / 2);
+                // P3: Tip
+                const p3 = transform(len, 0);
+                // P4: Bottom Shoulder
+                const p4 = transform(shoulderPos, -baseWidth / 2);
+
+                // Draw Polygon
+                graphics.lineStyle(1.5, boneLineColor, 0.8);
+                graphics.beginFill(boneColor, boneFillAlpha);
+                
+                graphics.moveTo(x, y); // Start
+                graphics.lineTo(p2.x, p2.y);
+                graphics.lineTo(p3.x, p3.y);
+                graphics.lineTo(p4.x, p4.y);
+                graphics.lineTo(x, y); // Close loop
+                
+                graphics.closePath();
+                graphics.endFill();
+
+                // Draw Pivot Joint (Hollow/Dark Circle) at Root
+                graphics.lineStyle(1, boneColor, 1);
+                graphics.beginFill(0x000000, 0.5); 
+                graphics.drawCircle(x, y, 1.5); // Reduced size
+                graphics.endFill();
+
+            } else {
+                // 0-length bone (Control/IK point)
+                // Draw Target Circle with X
+                const radius = 3; // Reduced size
+                
+                graphics.lineStyle(1.5, boneColor, boneAlpha);
+                graphics.beginFill(boneColor, 0.1); 
+                graphics.drawCircle(x, y, radius);
+                graphics.endFill();
+
+                // X inside
+                const d = radius * 0.5;
+                graphics.moveTo(x - d, y - d);
+                graphics.lineTo(x + d, y + d);
+                graphics.moveTo(x + d, y - d);
+                graphics.lineTo(x - d, y + d);
+            }
+        }
+    }
+
+    // Reuse vertex array to save GC
+    const vertices: ArrayLike<number> = [];
+    
+    // Iterate Slots for Attachments
+    for (const slot of skeleton.slots) {
+        if (!slot.attachment) continue;
+        const attachment = slot.attachment;
+
+        // 2. Region Attachments (Images)
+        if (attachment instanceof RegionAttachment) {
+            if (config.regions) {
+                const worldVertices = new Float32Array(8);
+                attachment.computeWorldVertices(slot.bone, worldVertices, 0, 2);
+                
+                graphics.lineStyle(1.5, 0xFF8800, 0.9); // Orange
+                graphics.moveTo(worldVertices[0], worldVertices[1]);
+                graphics.lineTo(worldVertices[2], worldVertices[3]);
+                graphics.lineTo(worldVertices[4], worldVertices[5]);
+                graphics.lineTo(worldVertices[6], worldVertices[7]);
+                graphics.lineTo(worldVertices[0], worldVertices[1]);
+                graphics.closePath();
+            }
+        }
+
+        // 3. Mesh Attachments
+        else if (attachment instanceof MeshAttachment) {
+            const worldVertices = new Float32Array(attachment.worldVerticesLength);
+            attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, worldVertices, 0, 2);
+
+            // Draw Hull (Contour)
+            if (config.meshHull) {
+                // hullLength is number of vertices on the hull
+                const hullLength = attachment.hullLength;
+                
+                if (hullLength > 0) {
+                    graphics.lineStyle(2, 0xFFFF00, 0.9); // Yellow
+                    graphics.beginFill(0xFFFF00, 0.1);
+                    
+                    // The hull vertices are the first 'hullLength' vertices in the array
+                    for (let i = 0; i < hullLength; i++) {
+                        const x = worldVertices[i * 2];
+                        const y = worldVertices[i * 2 + 1];
+                        if (i === 0) graphics.moveTo(x, y);
+                        else graphics.lineTo(x, y);
+                    }
+                    // Close the loop
+                    graphics.lineTo(worldVertices[0], worldVertices[1]);
+                    graphics.endFill();
+                }
+            }
+
+            // Draw Triangles (Wireframe)
+            if (config.meshTriangles) {
+                graphics.lineStyle(1, 0xFF00FF, 0.4); // Magenta, thinner, transparent
+                const triangles = attachment.triangles;
+                // Draw each triangle side
+                for (let i = 0; i < triangles.length; i += 3) {
+                    const t1 = triangles[i] * 2;
+                    const t2 = triangles[i+1] * 2;
+                    const t3 = triangles[i+2] * 2;
+                    
+                    const x1 = worldVertices[t1], y1 = worldVertices[t1+1];
+                    const x2 = worldVertices[t2], y2 = worldVertices[t2+1];
+                    const x3 = worldVertices[t3], y3 = worldVertices[t3+1];
+
+                    graphics.moveTo(x1, y1);
+                    graphics.lineTo(x2, y2);
+                    graphics.lineTo(x3, y3);
+                    graphics.lineTo(x1, y1);
+                }
+            }
+        }
+
+        // 4. Clipping Attachments
+        else if (attachment instanceof ClippingAttachment) {
+            if (config.clipping) {
+                 const worldVertices = new Float32Array(attachment.worldVerticesLength);
+                 attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, worldVertices, 0, 2);
+                 
+                 graphics.lineStyle(2, 0xCC0000, 1); // Dark Red
+                 graphics.beginFill(0xCC0000, 0.1);
+                 for (let i = 0; i < worldVertices.length; i += 2) {
+                     if (i === 0) graphics.moveTo(worldVertices[i], worldVertices[i+1]);
+                     else graphics.lineTo(worldVertices[i], worldVertices[i+1]);
+                 }
+                 graphics.closePath(); 
+                 graphics.endFill();
+            }
+        }
+
+        // 5. Path Attachments
+        else if (attachment instanceof PathAttachment) {
+            if (config.paths) {
+                 const worldVertices = new Float32Array(attachment.worldVerticesLength);
+                 attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, worldVertices, 0, 2);
+                 
+                 graphics.lineStyle(2, 0x0000FF, 1); // Blue
+                 // Paths can be open or closed
+                 for (let i = 0; i < worldVertices.length; i += 2) {
+                     if (i === 0) graphics.moveTo(worldVertices[i], worldVertices[i+1]);
+                     else graphics.lineTo(worldVertices[i], worldVertices[i+1]);
+                 }
+                 if (attachment.closed) graphics.closePath();
+                 
+                 // Draw control points
+                 graphics.lineStyle(0);
+                 graphics.beginFill(0x0000FF, 0.8);
+                 for (let i = 0; i < worldVertices.length; i += 2) {
+                    graphics.drawCircle(worldVertices[i], worldVertices[i+1], 3);
+                 }
+                 graphics.endFill();
+            }
+        }
+
+        // 6. Bounding Box Attachments
+        else if (attachment instanceof BoundingBoxAttachment) {
+            if (config.boundingBoxes) {
+                 const worldVertices = new Float32Array(attachment.worldVerticesLength);
+                 attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, worldVertices, 0, 2);
+                 
+                 graphics.lineStyle(2, 0x00FF00, 0.8); // Green
+                 graphics.beginFill(0x00FF00, 0.1);
+                 for (let i = 0; i < worldVertices.length; i += 2) {
+                     if (i === 0) graphics.moveTo(worldVertices[i], worldVertices[i+1]);
+                     else graphics.lineTo(worldVertices[i], worldVertices[i+1]);
+                 }
+                 graphics.closePath();
+                 graphics.endFill();
+            }
+        }
+    }
+  };
+
   // Handle Spine Model Loading
   useEffect(() => {
     if (!appRef.current || !spineModel || !mainContainerRef.current) return;
@@ -282,6 +536,11 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
         axesContainerRef.current.destroy({ children: true });
         axesContainerRef.current = null;
     }
+    if (debugGraphicsRef.current) {
+        mainContainerRef.current.removeChild(debugGraphicsRef.current);
+        debugGraphicsRef.current.destroy();
+        debugGraphicsRef.current = null;
+    }
 
     // 1. Create Axes
     const axes = createAxes();
@@ -292,8 +551,14 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     const spine = new Spine(spineModel.spine.skeleton.data); 
     spineRef.current = spine;
 
+    // 3. Create Debug Graphics (Layered on top of Spine)
+    const debugG = new PIXI.Graphics();
+    debugGraphicsRef.current = debugG;
+    // Add Spine first, then debug graphics
+    mainContainerRef.current.addChild(spine as any);
+    mainContainerRef.current.addChild(debugG);
+
     // Apply animation immediately if one is selected
-    // This fixes the issue where switching models doesn't autoplay if the animation name is preserved or re-set
     if (animation) {
         try {
             spine.state.setAnimation(0, animation, loop);
@@ -315,13 +580,34 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     
     spine.x = 0;
     spine.y = 0;
-    
-    mainContainerRef.current.addChild(spine as any);
 
     // Initial Stats
     updateStats();
 
   }, [spineModel]); // Only re-run when model object changes
+
+  // Ticker for Debug Rendering
+  useEffect(() => {
+    if (!appRef.current) return;
+    
+    const tickerFunc = () => {
+        if (spineRef.current && debugGraphicsRef.current) {
+            // Only render debug if any flag is true to save perf
+            const hasDebug = Object.values(debugConfig).some(v => v);
+            if (hasDebug) {
+                renderDebug(spineRef.current.skeleton, debugGraphicsRef.current);
+            } else {
+                debugGraphicsRef.current.clear();
+            }
+        }
+    };
+
+    appRef.current.ticker.add(tickerFunc);
+    
+    return () => {
+        appRef.current?.ticker.remove(tickerFunc);
+    };
+  }, [debugConfig]);
 
   // Handle Animation Change (Secondary)
   useEffect(() => {
