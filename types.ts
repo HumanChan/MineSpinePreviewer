@@ -10,6 +10,7 @@ export interface SpineModel {
     width: number;
     height: number;
     size: number; // File size in bytes
+    url: string; // Blob URL for preview
   }[];
 }
 

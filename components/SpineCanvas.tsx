@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { Spine, RegionAttachment, MeshAttachment, ClippingAttachment, PathAttachment, BoundingBoxAttachment, Skeleton } from '@pixi-spine/runtime-3.8';
 import { SpineModel, SpineDebugConfig } from '../types';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Info } from 'lucide-react';
+import { TextureAtlasModal } from './TextureAtlasModal';
 
 interface SpineCanvasProps {
   spineModel: SpineModel | null;
@@ -46,6 +47,16 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
   const mainContainerRef = useRef<PIXI.Container | null>(null);
   const axesContainerRef = useRef<PIXI.Container | null>(null);
   const debugGraphicsRef = useRef<PIXI.Graphics | null>(null);
+
+  // Modal State
+  const [selectedTexture, setSelectedTexture] = useState<{
+      name: string;
+      url: string;
+      width: number;
+      height: number;
+  } | null>(null);
+  const [animStats, setAnimStats] = useState({ duration: 0, fps: 30, frameCount: 0 });
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   // Stats State
   const [stats, setStats] = useState({ 
@@ -196,6 +207,22 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
         blendModes: Array.from(detectedBlendModes)
     });
   };
+
+  // Update Animation Stats for Modal
+  useEffect(() => {
+    if (!spineModel || !animation) {
+        setAnimStats({ duration: 0, fps: 30, frameCount: 0 });
+        return;
+    }
+    // Find animation data
+    const animData = spineModel.spine.skeleton.data.findAnimation(animation);
+    if (animData) {
+        const fps = (spineModel.spine.skeleton.data as any).fps || 30; // Default to 30 if not in data
+        const duration = animData.duration;
+        const frameCount = Math.ceil(duration * fps);
+        setAnimStats({ duration, fps, frameCount });
+    }
+  }, [spineModel, animation]);
 
   // Create Axes Helper
   const createAxes = () => {
@@ -577,6 +604,7 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     mainContainerRef.current.x = cx;
     mainContainerRef.current.y = cy;
     mainContainerRef.current.scale.set(1); 
+    setZoomLevel(1);
     
     spine.x = 0;
     spine.y = 0;
@@ -653,6 +681,7 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
       const zoomSensitivity = 0.001;
       const newScale = Math.max(0.1, mainContainerRef.current.scale.x - e.deltaY * zoomSensitivity);
       mainContainerRef.current.scale.set(newScale);
+      setZoomLevel(newScale);
   };
 
   const handleResetZoom = () => {
@@ -661,6 +690,11 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
     const cy = appRef.current.screen.height / 2 + 200;
     mainContainerRef.current.scale.set(1);
     mainContainerRef.current.position.set(cx, cy);
+    setZoomLevel(1);
+  };
+
+  const handleOpenTextureInfo = (tex: any) => {
+      setSelectedTexture(tex);
   };
 
   return (
@@ -682,8 +716,8 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
 
         {/* Stats Panel */}
         {spineModel && (
-            <div className="absolute top-20 left-6 z-20 pointer-events-none select-none">
-                <div className="bg-zinc-950/80 backdrop-blur-md border border-zinc-700/50 p-5 rounded-xl shadow-2xl min-w-[300px] text-zinc-100 flex flex-col gap-6">
+            <div className="absolute top-20 left-6 z-20 select-none pointer-events-none">
+                <div className="bg-zinc-950/80 backdrop-blur-md border border-zinc-700/50 p-5 rounded-xl shadow-2xl min-w-[300px] text-zinc-100 flex flex-col gap-6 pointer-events-auto">
                     
                     {/* Section 1: Skeleton */}
                     <div>
@@ -755,11 +789,20 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                                     const isLargeDim = tex.width > 1024 || tex.height > 1024;
                                     const isLargeSize = tex.size > 2 * 1024 * 1024; // 2MB
                                     return (
-                                        <div key={i} className="flex justify-between items-center text-xs bg-zinc-900/50 p-2 rounded">
-                                            <span className="text-zinc-200 truncate max-w-[120px]" title={tex.name}>{tex.name}</span>
-                                            <div className="flex gap-2 text-zinc-400 font-mono font-medium">
-                                                <span className={isLargeDim ? 'text-red-500 font-bold' : ''}>{tex.width}x{tex.height}</span>
-                                                <span className={isLargeSize ? 'text-red-500 font-bold' : ''}>{formatBytes(tex.size)}</span>
+                                        <div key={i} className="flex justify-between items-center text-xs bg-zinc-900/50 p-2 rounded group hover:bg-zinc-800 transition-colors">
+                                            <span className="text-zinc-200 truncate max-w-[100px]" title={tex.name}>{tex.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex gap-2 text-zinc-400 font-mono font-medium">
+                                                    <span className={isLargeDim ? 'text-red-500 font-bold' : ''}>{tex.width}x{tex.height}</span>
+                                                    <span className={isLargeSize ? 'text-red-500 font-bold' : ''}>{formatBytes(tex.size)}</span>
+                                                </div>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleOpenTextureInfo(tex); }}
+                                                    className="p-1 text-zinc-500 hover:text-white hover:bg-zinc-700 rounded transition-colors"
+                                                    title="查看详情"
+                                                >
+                                                    <Info size={14} />
+                                                </button>
                                             </div>
                                         </div>
                                     );
@@ -774,7 +817,10 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
 
         {/* Bottom Left Controls */}
         {spineModel && (
-            <div className="absolute bottom-4 left-6 z-20">
+            <div className="absolute bottom-4 left-6 z-20 flex items-center gap-4">
+                <div className="bg-zinc-900/80 backdrop-blur border border-zinc-700 text-zinc-300 px-3 py-2 rounded-full text-xs font-mono shadow-lg">
+                    {Math.round(zoomLevel * 100)}%
+                </div>
                 <button
                     onClick={handleResetZoom}
                     className="flex items-center gap-2 px-4 py-2 bg-zinc-800/80 backdrop-blur border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700 rounded-full shadow-lg transition-all text-xs font-medium"
@@ -783,6 +829,20 @@ export const SpineCanvas: React.FC<SpineCanvasProps> = ({
                 </button>
             </div>
         )}
+
+        {/* Texture Modal */}
+        <TextureAtlasModal 
+            isOpen={!!selectedTexture}
+            onClose={() => setSelectedTexture(null)}
+            textureName={selectedTexture?.name || ''}
+            textureUrl={selectedTexture?.url || ''}
+            width={selectedTexture?.width || 0}
+            height={selectedTexture?.height || 0}
+            currentAnimation={animation}
+            animDuration={animStats.duration}
+            animFps={animStats.fps}
+            animFrameCount={animStats.frameCount}
+        />
     </div>
   );
 };

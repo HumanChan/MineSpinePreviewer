@@ -20,12 +20,12 @@ export class SpineLoaderService {
     // 2. Pre-load all image files once
     // This creates a pool of textures that any atlas can reference.
     const imageFiles = files.filter(f => ['png', 'jpg', 'jpeg'].includes(f.extension));
-    const loadedImages = new Map<string, { img: HTMLImageElement, size: number }>();
+    const loadedImages = new Map<string, { img: HTMLImageElement, size: number, url: string }>();
     
     await Promise.all(imageFiles.map(imgFile => new Promise<void>((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
-            loadedImages.set(imgFile.name, { img, size: imgFile.file.size });
+            loadedImages.set(imgFile.name, { img, size: imgFile.file.size, url: imgFile.url });
             resolve();
         };
         img.onerror = () => {
@@ -68,7 +68,7 @@ export class SpineLoaderService {
   private static async loadSingleSpine(
     skelFile: UploadedFile, 
     atlasFile: UploadedFile, 
-    loadedImages: Map<string, { img: HTMLImageElement, size: number }>
+    loadedImages: Map<string, { img: HTMLImageElement, size: number, url: string }>
   ): Promise<SpineModel> {
     
     // Read Atlas content
@@ -78,7 +78,7 @@ export class SpineLoaderService {
     return new Promise((resolve, reject) => {
       new TextureAtlas(atlasText, (path: string, loaderFunction: (t: any) => void) => {
         // Find the matching pre-loaded image
-        let foundData: { img: HTMLImageElement, size: number } | undefined;
+        let foundData: { img: HTMLImageElement, size: number, url: string } | undefined;
 
         for (const [name, data] of loadedImages.entries()) {
              // 1. Exact match
@@ -128,11 +128,11 @@ export class SpineLoaderService {
             
             // Extract Texture Info for UI
             // We iterate atlas pages to be sure we list what the spine actually uses
-            const textureInfo: { name: string; width: number; height: number; size: number }[] = [];
+            const textureInfo: { name: string; width: number; height: number; size: number; url: string }[] = [];
             
             for (const page of atlas.pages) {
                 // Find matching image in loadedImages based on page name
-                let foundData: { img: HTMLImageElement, size: number } | undefined;
+                let foundData: { img: HTMLImageElement, size: number, url: string } | undefined;
                 
                 for (const [name, data] of loadedImages.entries()) {
                      if (name === page.name || name.endsWith(page.name) || page.name.endsWith(name)) {
@@ -146,16 +146,16 @@ export class SpineLoaderService {
                         name: page.name,
                         width: foundData.img.width,
                         height: foundData.img.height,
-                        size: foundData.size
+                        size: foundData.size,
+                        url: foundData.url
                     });
                 } else {
-                    // Should theoretically not happen if atlas loaded successfully, 
-                    // but fallback to page dimensions if source image missing
                     textureInfo.push({
                         name: page.name,
                         width: page.width,
                         height: page.height,
-                        size: 0
+                        size: 0,
+                        url: ''
                     });
                 }
             }
